@@ -18,14 +18,15 @@ import javax.swing.SwingConstants;
  */
 public class GaborFilter {
     public static void main(String... args) throws IOException {
-		JFileChooser fc = new JFileChooser();
-		fc.setDialogTitle("フィルタする画像");
-		int dialogResult = fc.showOpenDialog(null);
-		if(dialogResult != JFileChooser.APPROVE_OPTION){
-			return;
-		}
-		File imageFile = fc.getSelectedFile();
-
+        /*
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("フィルタする画像");
+        int dialogResult = fc.showOpenDialog(null);
+        if(dialogResult != JFileChooser.APPROVE_OPTION){
+        return;
+        }
+        File imageFile = fc.getSelectedFile();*/
+        File imageFile = new File("C:\\Users\\naoki\\Desktop\\1353908241630o.jpg");
         JFrame f = new JFrame("Gaborフィルタ");
         f.setLayout(new GridLayout(3, 2));
 
@@ -42,29 +43,56 @@ public class GaborFilter {
         f.add(createLabel("フィルタ", filterImage));
 
         BufferedImage imgRead = ImageIO.read(imageFile); // 適当な画像を指定
-		int width = 400, height = 300;
-		if(imgRead.getWidth() * height > imgRead.getHeight() * width){
-			height = imgRead.getHeight() * height / imgRead.getWidth();
-		}else{
-			width = imgRead.getWidth() * width / imgRead.getHeight();
-		}
-		BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-		Graphics g = img.getGraphics();
-		g.drawImage(imgRead, 0, 0, width, height, null);
-		g.dispose();
+        int width = 400, height = 300;
+        if(imgRead.getWidth() * height > imgRead.getHeight() * width){
+            height = imgRead.getHeight() * width / imgRead.getWidth();
+        }else{
+            width = imgRead.getWidth() * height / imgRead.getHeight();
+        }
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics g = img.getGraphics();
+        g.drawImage(imgRead, 0, 0, width, height, null);
+        g.dispose();
+
+        double[][][] imageData = new double[3][width][height];
+        for(int x = 0; x < width; ++x){
+            for(int y = 0; y < height; ++y){
+                int rgb = img.getRGB(x, y);
+                imageData[0][x][y] = (rgb >> 16 & 0xff) / 255.;
+                imageData[1][x][y] = (rgb >> 8 & 0xff) / 255.;
+                imageData[2][x][y] = (rgb & 0xff) / 255.;
+            }
+        }
+
 
         f.add(createLabel("オリジナル", img));
 
         String[] names = {"縦", "ななめ", "横", "ななめ"};
         for(int i = 0; i < 4; ++i){
             double[][] filter = createGabor(9, Math.PI / 4 * i, gamma, sigma);
-            BufferedImage filtered = applyFilter(img, filter);
+            double[][][] filteredData = applyFilter(imageData, filter);
+            BufferedImage filtered = arrayToImage(filteredData);
             f.add(createLabel(String.format("フィルター%d(%s)",i , names[i]), filtered));
         }
 
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setSize(800, 1200);
         f.setVisible(true);
+    }
+
+    static BufferedImage arrayToImage(double[][][] filteredData) {
+        BufferedImage filtered = new BufferedImage(
+                filteredData[0].length, filteredData[0][0].length,
+                BufferedImage.TYPE_INT_RGB);
+        for(int x = 0; x < filteredData[0].length; ++x){
+            for(int y = 0; y < filteredData[0][0].length; ++y){
+                filtered.setRGB(x, y,
+                        ((int)clip(filteredData[0][x][y] * 255) << 16) +
+                        ((int)clip(filteredData[1][x][y] * 255) << 8) +
+                         (int)clip(filteredData[2][x][y] * 255));
+            }
+        }
+        return filtered;
     }
 
     /** ラベル生成 */
@@ -118,25 +146,23 @@ public class GaborFilter {
     }
 
     /** フィルタを適用する */
-    static BufferedImage applyFilter(BufferedImage img, double[][] filter) {
-        int width = img.getWidth() - filter.length + 1;
-        int height = img.getHeight() - filter.length + 1;
-        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+    static double[][][] applyFilter(double[][][] img, double[][] filter) {
+        int width = img[0].length - filter.length + 1;
+        int height = img[0][0].length - filter.length + 1;
+        double[][][] result = new double[3][width][height];
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
-                double r = 0;
-                double g = 0;
-                double b = 0;
+                result[0][x][y] = 0;
+                result[1][x][y] = 0;
+                result[2][x][y] = 0;
                 for(int i = 0; i < filter.length; ++i){
                     for(int j = 0; j < filter.length; ++j){
-                        int rgb = img.getRGB(x + i, y + j);
                         double f = filter[i][j];
-                        r += ((rgb >> 16) & 255) * f;
-                        g += ((rgb >> 8) & 255) * f;
-                        b += (rgb & 255) * f;
+                        result[0][x][y] += img[0][x + i][y + j] * f;
+                        result[1][x][y] += img[1][x + i][y + j] * f;
+                        result[2][x][y] += img[2][x + i][y + j] * f;
                     }
                 }
-                result.setRGB(x, y, (clip(r) << 16) + (clip(g) << 8) + clip(b));
             }
         }
         return result;

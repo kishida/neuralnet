@@ -18,13 +18,13 @@ import javax.swing.SwingConstants;
  */
 public class GaborFilter {
     public static void main(String... args) throws IOException {
-		JFileChooser fc = new JFileChooser();
-		fc.setDialogTitle("フィルタする画像");
-		int dialogResult = fc.showOpenDialog(null);
-		if(dialogResult != JFileChooser.APPROVE_OPTION){
-			return;
-		}
-		File imageFile = fc.getSelectedFile();
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("フィルタする画像");
+        int dialogResult = fc.showOpenDialog(null);
+        if(dialogResult != JFileChooser.APPROVE_OPTION){
+            return;
+        }
+        File imageFile = fc.getSelectedFile();
 
         JFrame f = new JFrame("Gaborフィルタ");
         f.setLayout(new GridLayout(3, 2));
@@ -42,26 +42,26 @@ public class GaborFilter {
         f.add(createLabel("フィルタ", filterImage));
 
         BufferedImage imgRead = ImageIO.read(imageFile); // 適当な画像を指定
-		int width = 400, height = 300;
-		if(imgRead.getWidth() * height > imgRead.getHeight() * width){
-			height = imgRead.getHeight() * width / imgRead.getWidth();
-		}else{
-			width = imgRead.getWidth() * height / imgRead.getHeight();
-		}
-		BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-		Graphics g = img.getGraphics();
-		g.drawImage(imgRead, 0, 0, width, height, null);
-		g.dispose();
+        int width = 400, height = 300;
+        if(imgRead.getWidth() * height > imgRead.getHeight() * width){
+            height = imgRead.getHeight() * width / imgRead.getWidth();
+        }else{
+            width = imgRead.getWidth() * height / imgRead.getHeight();
+        }
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics g = img.getGraphics();
+        g.drawImage(imgRead, 0, 0, width, height, null);
+        g.dispose();
 
-		double[][][] imageData = new double[3][width][height];
-		for(int x = 0; x < width; ++x){
-			for(int y = 0; y < height; ++y){
-				int rgb = img.getRGB(x, y);
-				imageData[0][x][y] = (rgb >> 16 & 0xff) / 255.;
-				imageData[1][x][y] = (rgb >> 8 & 0xff) / 255.;
-				imageData[2][x][y] = (rgb & 0xff) / 255.;
-			}
-		}
+        double[][][] imageData = new double[3][width][height];
+        for(int x = 0; x < width; ++x){
+            for(int y = 0; y < height; ++y){
+                int rgb = img.getRGB(x, y);
+                imageData[0][x][y] = (rgb >> 16 & 0xff) / 255.;
+                imageData[1][x][y] = (rgb >> 8 & 0xff) / 255.;
+                imageData[2][x][y] = (rgb & 0xff) / 255.;
+            }
+        }
 
 
         f.add(createLabel("オリジナル", img));
@@ -70,15 +70,15 @@ public class GaborFilter {
         for(int i = 0; i < 4; ++i){
             double[][] filter = createGabor(9, Math.PI / 4 * i, gamma, sigma);
             double[][][] filteredData = applyFilter(imageData, filter);
-			BufferedImage filtered = new BufferedImage(filteredData[0].length, filteredData[0][0].length, BufferedImage.TYPE_INT_RGB);
-			for(int x = 0; x < filteredData[0].length; ++x){
-				for(int y = 0; y < filteredData[0][0].length; ++y){
-					filtered.setRGB(x, y,
-							((int)(filteredData[0][x][y] * 255) << 16) +
-							((int)(filteredData[1][x][y] * 255) << 8) +
-							(int)(filteredData[2][x][y] * 255));
-				}
-			}
+                BufferedImage filtered = new BufferedImage(filteredData[0].length, filteredData[0][0].length, BufferedImage.TYPE_INT_RGB);
+                for(int x = 0; x < filteredData[0].length; ++x){
+                    for(int y = 0; y < filteredData[0][0].length; ++y){
+                        filtered.setRGB(x, y,
+                            ((int)(filteredData[0][x][y] * 255) << 16) +
+                            ((int)(filteredData[1][x][y] * 255) << 8) +
+                            (int)(filteredData[2][x][y] * 255));
+                    }
+                }
             f.add(createLabel(String.format("フィルター%d(%s)",i , names[i]), filtered));
         }
 

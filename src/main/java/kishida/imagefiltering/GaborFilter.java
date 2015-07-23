@@ -18,14 +18,15 @@ import javax.swing.SwingConstants;
  */
 public class GaborFilter {
     public static void main(String... args) throws IOException {
+        /*
         JFileChooser fc = new JFileChooser();
         fc.setDialogTitle("フィルタする画像");
         int dialogResult = fc.showOpenDialog(null);
         if(dialogResult != JFileChooser.APPROVE_OPTION){
-            return;
+        return;
         }
-        File imageFile = fc.getSelectedFile();
-
+        File imageFile = fc.getSelectedFile();*/
+        File imageFile = new File("C:\\Users\\naoki\\Desktop\\1353908241630o.jpg");
         JFrame f = new JFrame("Gaborフィルタ");
         f.setLayout(new GridLayout(3, 2));
 
@@ -70,21 +71,28 @@ public class GaborFilter {
         for(int i = 0; i < 4; ++i){
             double[][] filter = createGabor(9, Math.PI / 4 * i, gamma, sigma);
             double[][][] filteredData = applyFilter(imageData, filter);
-                BufferedImage filtered = new BufferedImage(filteredData[0].length, filteredData[0][0].length, BufferedImage.TYPE_INT_RGB);
-                for(int x = 0; x < filteredData[0].length; ++x){
-                    for(int y = 0; y < filteredData[0][0].length; ++y){
-                        filtered.setRGB(x, y,
-                            ((int)(filteredData[0][x][y] * 255) << 16) +
-                            ((int)(filteredData[1][x][y] * 255) << 8) +
-                            (int)(filteredData[2][x][y] * 255));
-                    }
-                }
+            BufferedImage filtered = arrayToImage(filteredData);
             f.add(createLabel(String.format("フィルター%d(%s)",i , names[i]), filtered));
         }
 
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setSize(800, 1200);
         f.setVisible(true);
+    }
+
+    static BufferedImage arrayToImage(double[][][] filteredData) {
+        BufferedImage filtered = new BufferedImage(
+                filteredData[0].length, filteredData[0][0].length,
+                BufferedImage.TYPE_INT_RGB);
+        for(int x = 0; x < filteredData[0].length; ++x){
+            for(int y = 0; y < filteredData[0][0].length; ++y){
+                filtered.setRGB(x, y,
+                        ((int)clip(filteredData[0][x][y] * 255) << 16) +
+                        ((int)clip(filteredData[1][x][y] * 255) << 8) +
+                         (int)clip(filteredData[2][x][y] * 255));
+            }
+        }
+        return filtered;
     }
 
     /** ラベル生成 */
@@ -150,9 +158,9 @@ public class GaborFilter {
                 for(int i = 0; i < filter.length; ++i){
                     for(int j = 0; j < filter.length; ++j){
                         double f = filter[i][j];
-                        result[0][x][y] += img[0][x][y] * f;
-                        result[1][x][y] += img[1][x][y] * f;
-                        result[2][x][y] += img[2][x][y] * f;
+                        result[0][x][y] += img[0][x + i][y + j] * f;
+                        result[1][x][y] += img[1][x + i][y + j] * f;
+                        result[2][x][y] += img[2][x + i][y + j] * f;
                     }
                 }
             }

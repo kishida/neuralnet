@@ -54,15 +54,7 @@ public class GaborFilter {
         g.drawImage(imgRead, 0, 0, width, height, null);
         g.dispose();
 
-        double[][][] imageData = new double[3][width][height];
-        for(int x = 0; x < width; ++x){
-            for(int y = 0; y < height; ++y){
-                int rgb = img.getRGB(x, y);
-                imageData[0][x][y] = (rgb >> 16 & 0xff) / 255.;
-                imageData[1][x][y] = (rgb >> 8 & 0xff) / 255.;
-                imageData[2][x][y] = (rgb & 0xff) / 255.;
-            }
-        }
+        double[][][] imageData = imageToArray(width, height, img);
 
 
         f.add(createLabel("オリジナル", img));
@@ -78,6 +70,19 @@ public class GaborFilter {
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setSize(800, 1200);
         f.setVisible(true);
+    }
+
+    private static double[][][] imageToArray(int width, int height, BufferedImage img) {
+        double[][][] imageData = new double[3][width][height];
+        for(int x = 0; x < width; ++x){
+            for(int y = 0; y < height; ++y){
+                int rgb = img.getRGB(x, y);
+                imageData[0][x][y] = (rgb >> 16 & 0xff) / 255.;
+                imageData[1][x][y] = (rgb >> 8 & 0xff) / 255.;
+                imageData[2][x][y] = (rgb & 0xff) / 255.;
+            }
+        }
+        return imageData;
     }
 
     static BufferedImage arrayToImage(double[][][] filteredData) {

@@ -1,13 +1,14 @@
 package kishida.imagefiltering;
 
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridLayout;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
-import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.SwingConstants;
@@ -43,19 +44,8 @@ public class GaborFilter {
         f.add(createLabel("フィルタ", filterImage));
 
         BufferedImage imgRead = ImageIO.read(imageFile); // 適当な画像を指定
-        int width = 400, height = 300;
-        if(imgRead.getWidth() * height > imgRead.getHeight() * width){
-            height = imgRead.getHeight() * width / imgRead.getWidth();
-        }else{
-            width = imgRead.getWidth() * height / imgRead.getHeight();
-        }
-        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        Graphics g = img.getGraphics();
-        g.drawImage(imgRead, 0, 0, width, height, null);
-        g.dispose();
-
-        double[][][] imageData = imageToArray(width, height, img);
-
+        BufferedImage img = resize(imgRead, 400, 300);
+        double[][][] imageData = imageToArray(img);
 
         f.add(createLabel("オリジナル", img));
 
@@ -72,7 +62,9 @@ public class GaborFilter {
         f.setVisible(true);
     }
 
-    private static double[][][] imageToArray(int width, int height, BufferedImage img) {
+    private static double[][][] imageToArray(BufferedImage img) {
+        int width = img.getWidth();
+        int height = img.getHeight();
         double[][][] imageData = new double[3][width][height];
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
@@ -171,5 +163,19 @@ public class GaborFilter {
             }
         }
         return result;
+    }
+
+    private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
+        if(imgRead.getWidth() * height > imgRead.getHeight() * width){
+            height = imgRead.getHeight() * width / imgRead.getWidth();
+        }else{
+            width = imgRead.getWidth() * height / imgRead.getHeight();
+        }
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics g = img.getGraphics();
+        ((Graphics2D)g).setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.drawImage(imgRead, 0, 0, width, height, null);
+        g.dispose();
+        return img;
     }
 }

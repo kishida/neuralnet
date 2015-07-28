@@ -25,6 +25,7 @@ import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 
 /**
  *
@@ -35,12 +36,19 @@ public class AutoEncoder {
         JFrame f = new JFrame("自己符号化器");
         f.setSize(600, 400);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        f.setLayout(new GridLayout(6, 8));
+        f.setLayout(new GridLayout(2, 1));
         f.setVisible(true);
-        
+        JPanel top = new JPanel(new GridLayout(1, 2));
+        f.add(top);
+        JLabel left = new JLabel();
+        top.add(left);
+        JLabel right = new JLabel();
+        top.add(right);
+        JPanel bottom = new JPanel(new GridLayout(6, 8));
+        f.add(bottom);
         JLabel[] labels = IntStream.range(0, 48)
                 .mapToObj(i -> new JLabel())
-                .peek(f::add)
+                .peek(bottom::add)
                 .toArray(i -> new JLabel[i]);
         
         
@@ -65,9 +73,11 @@ public class AutoEncoder {
                         System.out.println(count[0] + ":" + p);
                         BufferedImage readImg = ImageIO.read(p.toFile());
                         BufferedImage resized = resize(readImg, 256, 256);
+                        left.setIcon(new ImageIcon(resized));
                         double[][][] resizedImage = imageToArray(resized);
                         double[][][] filtered = applyFilter(resizedImage, filters, 4);
                         double[][][] inverseImage = applyInverseFilter(filtered, filters, 4);
+                        right.setIcon(new ImageIcon(arrayToImage(inverseImage)));
                         supervisedLearn(inverseImage, resizedImage, filters);
                         for(int i = 0; i < filters.length; ++i){
                             labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
@@ -85,7 +95,7 @@ public class AutoEncoder {
     
     static void supervisedLearn(double[][][] data, double[][][] superviser, double[][][][] filters){
         double[][][][] oldFilters = new double[filters.length][][][];
-        for(int i = 0; i < filters.length; ++i){
+        IntStream.range(0, filters.length).forEach(i -> {
             oldFilters[i] = new double[filters[i].length][][];
             for(int j = 0; j < filters[i].length; ++j){
                 oldFilters[i][j] = new double[filters[i][j].length][];
@@ -96,7 +106,7 @@ public class AutoEncoder {
                     }
                 }
             }
-        }
+        });
         double delta = 0.00001;
         for(int lch = 0; lch < Math.min(data.length, superviser.length); ++lch){
             int ch = lch;

@@ -7,142 +7,19 @@ package kishida.imagefiltering;
 
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridLayout;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.List;
 import java.util.Random;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import javax.imageio.ImageIO;
-import javax.swing.ImageIcon;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
 
 /**
  *
  * @author naoki
  */
-public class AutoEncoder {
+public class ConvolutionalNet {
     public static void main(String[] args) {
-        JFrame f = new JFrame("自己符号化器");
-        f.setSize(600, 400);
-        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        f.setLayout(new GridLayout(2, 1));
-        f.setVisible(true);
-        JPanel top = new JPanel(new GridLayout(1, 2));
-        f.add(top);
-        JLabel left = new JLabel();
-        top.add(left);
-        JLabel right = new JLabel();
-        top.add(right);
-        JPanel bottom = new JPanel(new GridLayout(6, 8));
-        f.add(bottom);
-        JLabel[] labels = IntStream.range(0, 48)
-                .mapToObj(i -> new JLabel())
-                .peek(bottom::add)
-                .toArray(i -> new JLabel[i]);
         
-        
-        Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg");
-        new Thread(() -> {
-            double[][][][] filters = new double[48][][][];
-            for(int i = 0; i < filters.length; ++i){
-                filters[i] = new double[][][]{
-                    createRandomFilter(11),createRandomFilter(11),createRandomFilter(11)
-                };
-            }
-            for(int i = 0; i < filters.length; ++i){
-                labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
-            }
-            try {
-                List<Path> paths = Files.walk(dir).filter(p -> Files.isRegularFile(p)).collect(Collectors.toList());
-                Collections.shuffle(paths, r);
-                int[] count = {0};
-                paths.forEach((Path p) -> {
-                    ++count[0];
-                    try {
-                        System.out.println(count[0] + ":" + p);
-                        BufferedImage readImg = ImageIO.read(p.toFile());
-                        BufferedImage resized = resize(readImg, 256, 256);
-                        left.setIcon(new ImageIcon(resized));
-                        double[][][] resizedImage = imageToArray(resized);
-                        double[][][] filtered = applyFilter(resizedImage, filters, 1);
-                        double[][][] inverseImage = applyInverseFilter(filtered, filters, 1);
-                        right.setIcon(new ImageIcon(arrayToImage(inverseImage)));
-                        supervisedLearn(inverseImage, resizedImage, filters);
-                        for(int i = 0; i < filters.length; ++i){
-                            labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
-                        }
-                    } catch (IOException ex) {
-                        Logger.getLogger(AutoEncoder.class.getName()).log(Level.SEVERE, null, ex);
-                    }
-                    
-                });
-            } catch (IOException ex) {
-                Logger.getLogger(AutoEncoder.class.getName()).log(Level.SEVERE, null, ex);
-            }
-        }).start();
     }
-    
-    static void supervisedLearn(double[][][] data, double[][][] superviser, double[][][][] filters){
-        double[][][][] oldFilters = new double[filters.length][][][];
-        IntStream.range(0, filters.length).forEach(i -> {
-            oldFilters[i] = new double[filters[i].length][][];
-            for(int j = 0; j < filters[i].length; ++j){
-                oldFilters[i][j] = new double[filters[i][j].length][];
-                for(int k = 0; k < filters[i][j].length; ++k){
-                    oldFilters[i][j][k] = new double[filters[i][j][k].length];
-                    for(int l = 0; l < filters[i][j][k].length; ++l){
-                        oldFilters[i][j][k][l] = filters[i][j][k][l];
-                    }
-                }
-            }
-        });
-        double delta = 0.0001;
-        for(int lch = 0; lch < Math.min(data.length, superviser.length); ++lch){
-            int ch = lch;
-            int width = Math.min(data[ch].length, superviser[ch].length);
-            for(int lx = 0; lx < width; ++lx){
-                int x = lx;
-                int height = Math.min(data[ch][x].length, superviser[ch][x].length);
-                for(int ly = 0; ly < height; ++ly){
-                    int y = ly;
-                    //for(int f = 0; f < filters.length; ++f){
-                    IntStream.range(0, filters.length).parallel().forEach(f -> {
-                        for(int i = 0; i < filters[f][ch].length; ++i){
-                            int xx = x + i - filters[f][ch].length / 2;
-                            if(xx < 0 || xx >= width){
-                                continue;
-                            }
-                            for(int j = 0; j < filters[f][ch][i].length; ++j){
-                                int yy = y + i - filters[f][ch][i].length / 2;
-                                if(yy < 0 || yy >= height){
-                                    continue;
-                                }
-                                double c1 = superviser[ch][xx][yy];
-                                double c2 = data[ch][xx][yy];
-                                if(c1 < -1) c1 = -1; else if (c1 > 1) c1 = 1;
-                                if(c2 < -1) c2 = -1; else if (c2 > 1) c2 = 1;
-                                double d = (c1 - c2) * oldFilters[f][ch][i][j];
-                                filters[f][ch][i][j] -= d * delta;
-                            }
-                        }
-                    });
-                    //}
-                }
-            }
-        }
-    }
-    
 
     private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
         if(imgRead.getWidth() * height > imgRead.getHeight() * width){
@@ -157,7 +34,6 @@ public class AutoEncoder {
         g.dispose();
         return img;
     }    
-    
     /** 画像から配列へ変換 */
     private static double[][][] imageToArray(BufferedImage img) {
         int width = img.getWidth();

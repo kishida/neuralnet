@@ -34,6 +34,7 @@ import javax.swing.JPanel;
 public class AutoEncoder {
     public static void main(String[] args) {
         JFrame f = new JFrame("自己符号化器");
+        
         f.setSize(600, 400);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setLayout(new GridLayout(2, 1));
@@ -79,7 +80,8 @@ public class AutoEncoder {
                         double[][][] filtered = applyFilter(resizedImage, filters, stride);
                         double[][][] inverseImage = applyInverseFilter(filtered, filters, stride);
                         right.setIcon(new ImageIcon(arrayToImage(inverseImage)));
-                        supervisedLearn(inverseImage, resizedImage, filters, filtered, stride);
+                        double[][][] delta = supervisedLearn(inverseImage, resizedImage, filters, filtered, stride);
+                        convolutionalLearn(delta, filters, resizedImage, stride);
                         for(int i = 0; i < filters.length; ++i){
                             labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
                         }
@@ -94,55 +96,84 @@ public class AutoEncoder {
         }).start();
     }
     
-    static void supervisedLearn(double[][][] data, double[][][] superviser, double[][][][] filters, double[][][] filtered, int step){
-        double[][][][] oldFilters = new double[filters.length][][][];
-        IntStream.range(0, filters.length).forEach(i -> {
-            oldFilters[i] = new double[filters[i].length][][];
-            for(int j = 0; j < filters[i].length; ++j){
-                oldFilters[i][j] = new double[filters[i][j].length][];
-                for(int k = 0; k < filters[i][j].length; ++k){
-                    oldFilters[i][j][k] = new double[filters[i][j][k].length];
-                    for(int l = 0; l < filters[i][j][k].length; ++l){
-                        oldFilters[i][j][k][l] = filters[i][j][k][l];
+    static double[][][] supervisedLearn(double[][][] data, double[][][] superviser, double[][][][] filters, double[][][] filtered, int step){
+        int width = Math.min(data[0].length, superviser[0].length);
+        int height = Math.min(data[0][0].length, superviser[0][0].length);
+        double[][][]delta = new double[filtered.length][filtered[0].length][filtered[0][0].length];
+        for(int lx = 0; lx < width / step; ++lx){
+            int x = lx;
+            for(int ly = 0; ly < height / step; ++ly){
+                int y = ly;
+                IntStream.range(0, filters.length).parallel().forEach(f -> {
+                    for(int i = 0; i < filters[0][0].length; ++i){
+                        int xx = x * step + i - filters[0][0].length / 2;
+                        if(xx < 0 || xx >= width){
+                            continue;
+                        }
+                        for(int j = 0; j < filters[0][0][0].length; ++j){
+                            int yy = y * step + j - filters[0][0][0].length / 2;
+                            if(yy < 0 || yy >= height){
+                                continue;
+                            }
+                            for(int lch = 0; lch < Math.min(data.length, superviser.length); ++lch){
+                                int ch = lch;
+                                double c1 = superviser[ch][xx][yy];
+                                double c2 = data[ch][xx][yy];
+                                if(c1 < -1) c1 = -1; if(c1 > 1) c1 = 1;
+                                if(c2 < -1) c2 =-1; if(c2 > 1) c2 = 1;
+                                double d = (c2 - c1) * Math.max(0, filtered[f][x][y]);
+                                delta[f][x][y] += d;
+                            }
+                        }
                     }
-                }
+                });
             }
-        });
-        double delta = 0.0000002;
-            int width = Math.min(data[0].length, superviser[0].length);
-            for(int lx = 0; lx < width / step; ++lx){
-                int x = lx;
-                int height = Math.min(data[0][0].length, superviser[0][0].length);
-                for(int ly = 0; ly < height / step; ++ly){
-                    int y = ly;
-                    //for(int f = 0; f < filters.length; ++f){
-                    IntStream.range(0, filters.length).parallel().forEach(f -> {
+        }
+        return delta;
+    }
+    
+    static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[][][] input, int step ){
+        /*
+        System.out.printf("filters: %dx%dx%dx%d%n",
+                filters.length, filters[0].length, filters[0][0].length, filters[0][0][0].length);
+        System.out.printf("input: %dx%dx%d%n",
+                input.length, input[0].length, input[0][0].length);
+        System.out.printf("delta: %dx%dx%d%n",
+                delta.length, delta[0].length, delta[0][0].length);
+        */
+        double ep = 0.00000002;
+        //for(int f = 0; f < filters.length; ++f){
+        IntStream.range(0, filters.length).parallel().forEach(f -> {
+            for(int ch = 0; ch < filters[0].length; ++ch){
+                for(int x = 0; x < input[0].length / step; ++x){
+                    for(int y = 0; y < input[0][0].length / step; ++y){
                         for(int i = 0; i < filters[0][0].length; ++i){
                             int xx = x * step + i - filters[0][0].length / 2;
-                            if(xx < 0 || xx >= width){
+                            if(xx < 0 || xx >= input[0].length){
                                 continue;
                             }
                             for(int j = 0; j < filters[0][0][0].length; ++j){
                                 int yy = y * step + j - filters[0][0][0].length / 2;
-                                if(yy < 0 || yy >= height){
+                                if(yy < 0 || yy >= input[0][0].length){
                                     continue;
                                 }
-                                for(int lch = 0; lch < Math.min(data.length, superviser.length); ++lch){
-                                    int ch = lch;
-                                    double c1 = superviser[ch][xx][yy];
-                                    double c2 = data[ch][xx][yy];
-                                    double d = (c2 - c1) * Math.max(0, filtered[f][x][y]);
-                                    filters[f][ch][i][j] += d * delta;
+                                try {
+                                    double d = Math.max(input[ch][xx][yy], 0) * delta[f][x][y];
+                                    filters[f][ch][i][j] += d * ep;
+                                } catch (Exception e) {
+                                    System.out.printf("%s: f:%d ch:%d i:%d j:%d xx:%d yy:%d%n",
+                                            e, f, ch, i, j, xx, yy);
+                                    System.exit(1);
                                 }
                             }
                         }
-                    });
-                    //}
+                        
+                    }
                 }
             }
+        });
     }
     
-
     private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
         if(imgRead.getWidth() * height > imgRead.getHeight() * width){
             height = imgRead.getHeight() * width / imgRead.getWidth();

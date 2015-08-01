@@ -48,7 +48,7 @@ public class AutoEncoder {
         
         f.setSize(600, 400);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        f.setLayout(new GridLayout(2, 1));
+        f.setLayout(new GridLayout(3, 1));
         f.setVisible(true);
         JPanel top = new JPanel(new GridLayout(1, 2));
         f.add(top);
@@ -56,13 +56,18 @@ public class AutoEncoder {
         top.add(left);
         JLabel right = new JLabel();
         top.add(right);
+        JPanel middle = new JPanel(new GridLayout(6, 8));
+        f.add(middle);
+        JLabel[] labels = IntStream.range(0, 48)
+                .mapToObj(i -> new JLabel())
+                .peek(middle::add)
+                .toArray(i -> new JLabel[i]);
         JPanel bottom = new JPanel(new GridLayout(6, 8));
         f.add(bottom);
-        JLabel[] labels = IntStream.range(0, 48)
+        JLabel[] outlabels = IntStream.range(0, 48)
                 .mapToObj(i -> new JLabel())
                 .peek(bottom::add)
                 .toArray(i -> new JLabel[i]);
-        
         
         Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg");
         new Thread(() -> {
@@ -73,14 +78,21 @@ public class AutoEncoder {
                 };
             }
             double[] bias = new Random().doubles(48).toArray();
+            double[][][][] outfilters = new double[48][][][];
+            for(int i = 0; i < outfilters.length; ++i){
+                outfilters[i] = new double[][][]{
+                    createRandomFilter(11),createRandomFilter(11),createRandomFilter(11)
+                };
+            }
+            
             for(int i = 0; i < filters.length; ++i){
                 labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
             }
             try {
-                List<Img> paths = Files.walk(dir).filter(p -> Files.isRegularFile(p))
+                List<Img> pathsorg = Files.walk(dir).filter(p -> Files.isRegularFile(p))
                         .flatMap(p -> Stream.of(new Img(p, true), new Img(p, false)))
                         .collect(Collectors.toList());
-                
+                List<Img> paths = Collections.nCopies(10, pathsorg).stream().flatMap(l -> l.stream()).collect(Collectors.toList());
                 Collections.shuffle(paths, r);
                 int[] count = {0};
                 paths.forEach((Img im) -> {
@@ -98,12 +110,16 @@ public class AutoEncoder {
                         left.setIcon(new ImageIcon(resized));
                         double[][][] resizedImage = imageToArray(resized);
                         double[][][] filtered = applyFilter(resizedImage, filters, bias, stride);
-                        double[][][] inverseImage = applyInverseFilter(filtered, filters, stride);
+                        double[][][] inverseImage = applyInverseFilter(filtered, outfilters, stride);
                         right.setIcon(new ImageIcon(arrayToImage(inverseImage)));
-                        double[][][] delta = supervisedLearn(inverseImage, resizedImage, filters, filtered, stride);
+                        double[][][] delta = supervisedLearn(inverseImage, resizedImage, outfilters, filtered, stride);
                         convolutionalLearn(delta, filters, bias, resizedImage, stride);
                         for(int i = 0; i < filters.length; ++i){
                             labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
+                            labels[i].setText(String.format("%.3f", bias[i]));
+                        }
+                        for(int i = 0; i < outfilters.length; ++i){
+                            outlabels[i].setIcon(new ImageIcon(resize(arrayToImage(outfilters[i]), 44, 44)));
                         }
                     } catch (IOException ex) {
                         Logger.getLogger(AutoEncoder.class.getName()).log(Level.SEVERE, null, ex);
@@ -139,10 +155,11 @@ public class AutoEncoder {
                                 int ch = lch;
                                 double c1 = superviser[ch][xx][yy];
                                 double c2 = data[ch][xx][yy];
-                                if(c1 < -1) c1 = -1; if(c1 > 1) c1 = 1;
-                                if(c2 < -1) c2 =-1; if(c2 > 1) c2 = 1;
-                                double d = (c2 - c1) * Math.max(0, filtered[f][x][y]);
+                                //if(c1 < -1) c1 = -1; if(c1 > 1) c1 = 1;
+                                //if(c2 < -1) c2 =-1; if(c2 > 1) c2 = 1;
+                                double d = (c2 - c1) * (filtered[f][x][y] > 0 ? 1 : 0);
                                 delta[f][x][y] += d;
+                                filters[f][ch][i][j] += d * ep;
                             }
                         }
                     }
@@ -151,6 +168,7 @@ public class AutoEncoder {
         }
         return delta;
     }
+    static double ep = 0.000000001;
     
     static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[] bias, double[][][] input, int step ){
         /*
@@ -161,7 +179,6 @@ public class AutoEncoder {
         System.out.printf("delta: %dx%dx%d%n",
                 delta.length, delta[0].length, delta[0][0].length);
         */
-        double ep = 0.00000001;
         //for(int f = 0; f < filters.length; ++f){
         IntStream.range(0, filters.length).parallel().forEach(f -> {
             for(int ch = 0; ch < filters[0].length; ++ch){
@@ -178,7 +195,7 @@ public class AutoEncoder {
                                     continue;
                                 }
                                 try {
-                                    double d = Math.max(input[ch][xx][yy], 0) * delta[f][x][y];
+                                    double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y];
                                     filters[f][ch][i][j] += d * ep;
                                 } catch (Exception e) {
                                     System.out.printf("%s: f:%d ch:%d i:%d j:%d xx:%d yy:%d%n",
@@ -242,13 +259,6 @@ public class AutoEncoder {
                 total += result[i][j];
             }
         }
-        /*
-        double ave = (total - 1) / (size * size);
-        for(int i = 0; i < size; ++i){
-            for(int j = 0; j < size; ++j){
-                result[i][j] -= ave;
-            }
-        }*/
         
         return result;
     }

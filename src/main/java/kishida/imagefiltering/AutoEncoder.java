@@ -21,6 +21,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
@@ -32,6 +33,16 @@ import javax.swing.JPanel;
  * @author naoki
  */
 public class AutoEncoder {
+    static class Img{
+
+        public Img(Path filename, boolean inverse) {
+            this.filename = filename;
+            this.inverse = inverse;
+        }
+        Path filename;
+        boolean inverse;
+    }
+    
     public static void main(String[] args) {
         JFrame f = new JFrame("自己符号化器");
         
@@ -61,27 +72,36 @@ public class AutoEncoder {
                     createRandomFilter(11),createRandomFilter(11),createRandomFilter(11)
                 };
             }
+            double[] bias = new Random().doubles(48).toArray();
             for(int i = 0; i < filters.length; ++i){
                 labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
             }
             try {
-                List<Path> paths = Files.walk(dir).filter(p -> Files.isRegularFile(p)).collect(Collectors.toList());
+                List<Img> paths = Files.walk(dir).filter(p -> Files.isRegularFile(p))
+                        .flatMap(p -> Stream.of(new Img(p, true), new Img(p, false)))
+                        .collect(Collectors.toList());
+                
                 Collections.shuffle(paths, r);
                 int[] count = {0};
-                paths.forEach((Path p) -> {
+                paths.forEach((Img im) -> {
+                    Path p = im.filename;
                     ++count[0];
                     try {
                         int stride = 4;
                         System.out.println(count[0] + ":" + p);
                         BufferedImage readImg = ImageIO.read(p.toFile());
-                        BufferedImage resized = resize(readImg, 256, 256);
+                        if(readImg == null){
+                            System.out.println("no image");
+                            return;
+                        }
+                        BufferedImage resized = resize(readImg, 256, 256, im.inverse);
                         left.setIcon(new ImageIcon(resized));
                         double[][][] resizedImage = imageToArray(resized);
-                        double[][][] filtered = applyFilter(resizedImage, filters, stride);
+                        double[][][] filtered = applyFilter(resizedImage, filters, bias, stride);
                         double[][][] inverseImage = applyInverseFilter(filtered, filters, stride);
                         right.setIcon(new ImageIcon(arrayToImage(inverseImage)));
                         double[][][] delta = supervisedLearn(inverseImage, resizedImage, filters, filtered, stride);
-                        convolutionalLearn(delta, filters, resizedImage, stride);
+                        convolutionalLearn(delta, filters, bias, resizedImage, stride);
                         for(int i = 0; i < filters.length; ++i){
                             labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
                         }
@@ -132,7 +152,7 @@ public class AutoEncoder {
         return delta;
     }
     
-    static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[][][] input, int step ){
+    static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[] bias, double[][][] input, int step ){
         /*
         System.out.printf("filters: %dx%dx%dx%d%n",
                 filters.length, filters[0].length, filters[0][0].length, filters[0][0][0].length);
@@ -141,7 +161,7 @@ public class AutoEncoder {
         System.out.printf("delta: %dx%dx%d%n",
                 delta.length, delta[0].length, delta[0][0].length);
         */
-        double ep = 0.00000002;
+        double ep = 0.00000001;
         //for(int f = 0; f < filters.length; ++f){
         IntStream.range(0, filters.length).parallel().forEach(f -> {
             for(int ch = 0; ch < filters[0].length; ++ch){
@@ -167,7 +187,7 @@ public class AutoEncoder {
                                 }
                             }
                         }
-                        
+                        bias[f] += ep * delta[f][x][y];
                     }
                 }
             }
@@ -175,6 +195,9 @@ public class AutoEncoder {
     }
     
     private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
+        return resize(imgRead, width, height, false);
+    }
+    private static BufferedImage resize(BufferedImage imgRead, int width, int height, boolean inverse) {
         if(imgRead.getWidth() * height > imgRead.getHeight() * width){
             height = imgRead.getHeight() * width / imgRead.getWidth();
         }else{
@@ -183,7 +206,12 @@ public class AutoEncoder {
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics g = img.getGraphics();
         ((Graphics2D)g).setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g.drawImage(imgRead, 0, 0, width, height, null);
+        if(inverse){
+            g.drawImage(imgRead, width, 0, -width, height, null);
+        }else{
+            g.drawImage(imgRead, 0, 0, width, height, null);
+            
+        }
         g.dispose();
         return img;
     }    
@@ -214,13 +242,13 @@ public class AutoEncoder {
                 total += result[i][j];
             }
         }
-
+        /*
         double ave = (total - 1) / (size * size);
         for(int i = 0; i < size; ++i){
             for(int j = 0; j < size; ++j){
                 result[i][j] -= ave;
             }
-        }
+        }*/
         
         return result;
     }
@@ -233,42 +261,41 @@ public class AutoEncoder {
     }
 
     /** フィルタを適用する */
-    static double[][][] applyFilter(double[][][] img, double[][][][] filter, int inStride) {
+    static double[][][] applyFilter(double[][][] img, double[][][][] filter, double[] bias, int inStride) {
         int width = img[0].length;
         int height = img[0][0].length;
         int filterSize = filter[0][0].length;
         double[][][] result = new double[filter.length][width / inStride][height / inStride];
-        for(int lx = 0; lx < width / inStride; ++lx){
-            int x = lx;
-            for(int ly = 0; ly < height / inStride; ++ly){
-                int y = ly;
-                for(int li = 0; li < filter[0][0].length; ++li){
-                    int i = li;
-                    int xx = x * inStride + i - filterSize / 2;
-                    if(xx < 0 || xx >= width){
-                        continue;
-                    }
-                    IntStream.range(0, filter[0][0][0].length).parallel().forEach(j -> {
-                    //for(int j = 0; j < filter[0][0][0].length; ++j){
-                        int yy = y * inStride + j - filterSize / 2;
-                        if(yy < 0 || yy >= height){
-                            return;//ループを続ける
-                        }
-                        for(int fi = 0; fi < filter.length; ++fi){
-                            for(int fj = 0; fj < filter[fi].length; ++fj){
+        IntStream.range(0, filter.length).parallel().forEach(fi ->{
+            for(int lx = 0; lx < width / inStride; ++lx){
+                int x = lx;
+                for(int ly = 0; ly < height / inStride; ++ly){
+                    int y = ly;
+                    for(int ch = 0; ch < filter[fi].length; ++ch){
+                        for(int li = 0; li < filter[0][0].length; ++li){
+                            int i = li;
+                            int xx = x * inStride + i - filterSize / 2;
+                            if(xx < 0 || xx >= width){
+                                continue;
+                            }
+                            for(int j = 0; j < filter[0][0][0].length; ++j){
+                                int yy = y * inStride + j - filterSize / 2;
+                                if(yy < 0 || yy >= height){
+                                    continue;
+                                }
                                 try{
-                                result[fi][x][y] += img[fj][xx][yy] * 
-                                        filter[fi][fj][i][j];
+                                result[fi][x][y] += img[ch][xx][yy] * 
+                                        filter[fi][ch][i][j];
                                 }catch(ArrayIndexOutOfBoundsException ex){
                                     System.out.println(ex);
                                 }
                             }
                         }
-                    //}
-                    });
+                    }
+                    result[fi][x][y] += bias[fi];
                 }
             }
-        }
+        });
         return result;
     }
     /** フィルタを適用する */

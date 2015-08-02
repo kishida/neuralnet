@@ -1,34 +1,38 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
 package kishida.imagefiltering;
 
 import java.awt.Graphics;
-import java.awt.Graphics2D;
 import java.awt.GridLayout;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.SwingConstants;
 
 /**
  *
- * @author kishida
+ * @author naoki
  */
-public class GaborFilter {
+public class InverseFilter {
     public static void main(String... args) throws IOException {
-        /*
+        
         JFileChooser fc = new JFileChooser();
         fc.setDialogTitle("フィルタする画像");
         int dialogResult = fc.showOpenDialog(null);
         if(dialogResult != JFileChooser.APPROVE_OPTION){
-        return;
+            return;
         }
-        File imageFile = fc.getSelectedFile();*/
-        File imageFile = new File("C:\\Users\\naoki\\Desktop\\1353908241630o.jpg");
-        JFrame f = new JFrame("Gaborフィルタ");
+        File imageFile = fc.getSelectedFile();
+
+        JFrame f = new JFrame("Gabor逆フィルタ");
         f.setLayout(new GridLayout(3, 2));
 
         double gamma = 0.7;
@@ -44,27 +48,17 @@ public class GaborFilter {
         f.add(createLabel("フィルタ", filterImage));
 
         BufferedImage imgRead = ImageIO.read(imageFile); // 適当な画像を指定
-        BufferedImage img = resize(imgRead, 400, 300);
-        double[][][] imageData = imageToArray(img);
-
-        f.add(createLabel("オリジナル", img));
-
-        String[] names = {"縦", "ななめ", "横", "ななめ"};
-        for(int i = 0; i < 4; ++i){
-            double[][] filter = createGabor(9, Math.PI / 4 * i, gamma, sigma);
-            double[][][] filteredData = applyFilter(imageData, filter);
-            BufferedImage filtered = arrayToImage(filteredData);
-            f.add(createLabel(String.format("フィルター%d(%s)",i , names[i]), filtered));
+        int width = 400, height = 300;
+        if(imgRead.getWidth() * height > imgRead.getHeight() * width){
+            height = imgRead.getHeight() * width / imgRead.getWidth();
+        }else{
+            width = imgRead.getWidth() * height / imgRead.getHeight();
         }
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics g = img.getGraphics();
+        g.drawImage(imgRead, 0, 0, width, height, null);
+        g.dispose();
 
-        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        f.setSize(800, 1200);
-        f.setVisible(true);
-    }
-
-    private static double[][][] imageToArray(BufferedImage img) {
-        int width = img.getWidth();
-        int height = img.getHeight();
         double[][][] imageData = new double[3][width][height];
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
@@ -74,9 +68,52 @@ public class GaborFilter {
                 imageData[2][x][y] = (rgb & 0xff) / 255.;
             }
         }
-        return imageData;
+
+
+        f.add(createLabel("オリジナル", img));
+
+        String[] names = {"縦", "ななめ", "横", "ななめ"};
+        
+        int filterSize = 3;
+        double[][] blankFilter = new double[filterSize][filterSize];
+        
+        for(int i = 0; i < 4; ++i){
+            double[][] baseFilter = createGabor(filterSize, Math.PI / 4 * i, gamma, sigma);
+            double[][][][] filters = new double[][][][]{
+                {baseFilter, blankFilter, blankFilter},
+                {blankFilter, baseFilter, blankFilter},
+                {blankFilter, blankFilter, baseFilter}
+            };
+            double[][][] filteredData = applyFilter(imageData, filters);
+            //BufferedImage filtered = arrayToImage(filteredData);
+            double[][][][] inverse = invertFilter(filters);
+            double[][][] inverseData = applyFilter(filteredData, inverse);
+            BufferedImage filtered = arrayToImage(inverseData);
+            f.add(createLabel(String.format("フィルター%d(%s)",i , names[i]), filtered));
+        }
+
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setSize(800, 1200);
+        f.setVisible(true);
     }
 
+    static double[][][][] invertFilter(double[][][][] filter){
+        double[][][][] result = new double[filter.length][filter[0].length]
+                [filter[0][0].length][filter[0][0][0].length];
+        for(int fi = 0; fi < filter.length; ++fi){
+            for(int fj = 0; fj < filter[fi].length; ++fj){
+                for(int i = 0; i < filter[fi][fj].length; ++i){
+                    for(int j = 0; j < filter[fi][fj][i].length; ++j){
+                        result[fi][fj][i][j] = filter[fi][fj]
+                                [filter[fi][fj].length - i - 1]
+                                [filter[fi][fj][0].length - j - 1];
+                    }
+                }
+            }
+        }
+        return result;
+    }
+    
     static BufferedImage arrayToImage(double[][][] filteredData) {
         BufferedImage filtered = new BufferedImage(
                 filteredData[0].length, filteredData[0][0].length,
@@ -143,39 +180,27 @@ public class GaborFilter {
     }
 
     /** フィルタを適用する */
-    static double[][][] applyFilter(double[][][] img, double[][] filter) {
-        int width = img[0].length - filter.length + 1;
-        int height = img[0][0].length - filter.length + 1;
-        double[][][] result = new double[3][width][height];
+    static double[][][] applyFilter(double[][][] img, double[][][][] filter) {
+        int width = img[0].length - filter[0][0].length + 1;
+        int height = img[0][0].length - filter[0][0].length + 1;
+        double[][][] result = new double[filter.length][width][height];
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
-                result[0][x][y] = 0;
-                result[1][x][y] = 0;
-                result[2][x][y] = 0;
                 for(int i = 0; i < filter.length; ++i){
-                    for(int j = 0; j < filter.length; ++j){
-                        double f = filter[i][j];
-                        result[0][x][y] += img[0][x + i][y + j] * f;
-                        result[1][x][y] += img[1][x + i][y + j] * f;
-                        result[2][x][y] += img[2][x + i][y + j] * f;
+                    result[i][x][y] = 0;
+                }
+                for(int i = 0; i < filter[0][0].length; ++i){
+                    for(int j = 0; j < filter[0][0][0].length; ++j){
+                        for(int fi = 0; fi < filter.length; ++fi){
+                            for(int fj = 0; fj < filter[fi].length; ++fj){
+                                result[fi][x][y] += img[fj][x + i][y + j] * 
+                                        filter[fi][fj][i][j];
+                            }
+                        }
                     }
                 }
             }
         }
         return result;
-    }
-
-    private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
-        if(imgRead.getWidth() * height > imgRead.getHeight() * width){
-            height = imgRead.getHeight() * width / imgRead.getWidth();
-        }else{
-            width = imgRead.getWidth() * height / imgRead.getHeight();
-        }
-        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        Graphics g = img.getGraphics();
-        ((Graphics2D)g).setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g.drawImage(imgRead, 0, 0, width, height, null);
-        g.dispose();
-        return img;
     }
 }

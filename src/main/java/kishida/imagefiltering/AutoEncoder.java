@@ -33,6 +33,9 @@ import javax.swing.JPanel;
  * @author naoki
  */
 public class AutoEncoder {
+    static final int stride = 4;
+    static final double ep = 0.000000001;
+
     static class Img{
 
         public Img(Path filename, boolean inverse) {
@@ -99,7 +102,6 @@ public class AutoEncoder {
                     Path p = im.filename;
                     ++count[0];
                     try {
-                        int stride = 4;
                         System.out.println(count[0] + ":" + p);
                         BufferedImage readImg = ImageIO.read(p.toFile());
                         if(readImg == null){
@@ -136,11 +138,11 @@ public class AutoEncoder {
         int width = Math.min(data[0].length, superviser[0].length);
         int height = Math.min(data[0][0].length, superviser[0][0].length);
         double[][][]delta = new double[filtered.length][filtered[0].length][filtered[0][0].length];
-        for(int lx = 0; lx < width / step; ++lx){
-            int x = lx;
-            for(int ly = 0; ly < height / step; ++ly){
-                int y = ly;
-                IntStream.range(0, filters.length).parallel().forEach(f -> {
+        IntStream.range(0, filters.length).parallel().forEach(f -> {
+            for(int lx = 0; lx < width / step; ++lx){
+                int x = lx;
+                for(int ly = 0; ly < height / step; ++ly){
+                    int y = ly;
                     for(int i = 0; i < filters[0][0].length; ++i){
                         int xx = x * step + i - filters[0][0].length / 2;
                         if(xx < 0 || xx >= width){
@@ -163,23 +165,14 @@ public class AutoEncoder {
                             }
                         }
                     }
-                });
+                }
             }
-        }
+        });
         return delta;
     }
-    static double ep = 0.000000001;
     
+    /** 畳み込み層の学習 */
     static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[] bias, double[][][] input, int step ){
-        /*
-        System.out.printf("filters: %dx%dx%dx%d%n",
-                filters.length, filters[0].length, filters[0][0].length, filters[0][0][0].length);
-        System.out.printf("input: %dx%dx%d%n",
-                input.length, input[0].length, input[0][0].length);
-        System.out.printf("delta: %dx%dx%d%n",
-                delta.length, delta[0].length, delta[0][0].length);
-        */
-        //for(int f = 0; f < filters.length; ++f){
         IntStream.range(0, filters.length).parallel().forEach(f -> {
             for(int ch = 0; ch < filters[0].length; ++ch){
                 for(int x = 0; x < input[0].length / step; ++x){
@@ -194,14 +187,8 @@ public class AutoEncoder {
                                 if(yy < 0 || yy >= input[0][0].length){
                                     continue;
                                 }
-                                try {
-                                    double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y];
-                                    filters[f][ch][i][j] += d * ep;
-                                } catch (Exception e) {
-                                    System.out.printf("%s: f:%d ch:%d i:%d j:%d xx:%d yy:%d%n",
-                                            e, f, ch, i, j, xx, yy);
-                                    System.exit(1);
-                                }
+                                double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y];
+                                filters[f][ch][i][j] += d * ep;
                             }
                         }
                         bias[f] += ep * delta[f][x][y];
@@ -270,20 +257,17 @@ public class AutoEncoder {
         return (int)c;
     }
 
-    /** フィルタを適用する */
+    /** 畳み込みフィルタを適用する */
     static double[][][] applyFilter(double[][][] img, double[][][][] filter, double[] bias, int inStride) {
         int width = img[0].length;
         int height = img[0][0].length;
         int filterSize = filter[0][0].length;
         double[][][] result = new double[filter.length][width / inStride][height / inStride];
         IntStream.range(0, filter.length).parallel().forEach(fi ->{
-            for(int lx = 0; lx < width / inStride; ++lx){
-                int x = lx;
-                for(int ly = 0; ly < height / inStride; ++ly){
-                    int y = ly;
+            for(int x = 0; x < width / inStride; ++x){
+                for(int y = 0; y < height / inStride; ++y){
                     for(int ch = 0; ch < filter[fi].length; ++ch){
-                        for(int li = 0; li < filter[0][0].length; ++li){
-                            int i = li;
+                        for(int i = 0; i < filter[0][0].length; ++i){
                             int xx = x * inStride + i - filterSize / 2;
                             if(xx < 0 || xx >= width){
                                 continue;
@@ -293,12 +277,8 @@ public class AutoEncoder {
                                 if(yy < 0 || yy >= height){
                                     continue;
                                 }
-                                try{
                                 result[fi][x][y] += img[ch][xx][yy] * 
                                         filter[fi][ch][i][j];
-                                }catch(ArrayIndexOutOfBoundsException ex){
-                                    System.out.println(ex);
-                                }
                             }
                         }
                     }
@@ -314,33 +294,32 @@ public class AutoEncoder {
         int height = img[0][0].length;
         double[][][] result = new double[filter[0].length][width * outStride][height * outStride];
         int filterSize = filter[0][0].length;
-        for(int lx = 0; lx < width; ++lx){
-            int x = lx;
-            for(int ly = 0; ly < height; ++ly){
-                int y = ly;
-                for(int li = 0; li < filter[0][0].length; ++li){
-                    int i = li;
-                    int xx = x * outStride + i - filterSize / 2;
-                    if(xx < 0 || xx >= width * outStride){
-                        continue;
-                    }
-                        
-                    //for(int j = 0; j < filter[0][0][0].length; ++j){
-                    IntStream.range(0, filter[0][0][0].length).parallel().forEach(j -> {
-                        int yy = y * outStride + j - filterSize / 2;
-                        if(yy < 0 || yy >= height * outStride){
-                            return; // ループを続ける
+        IntStream.range(0, filter[0].length).parallel().forEach(ch -> {
+            for(int lx = 0; lx < width; ++lx){
+                int x = lx;
+                for(int ly = 0; ly < height; ++ly){
+                    int y = ly;
+                    for(int li = 0; li < filter[0][0].length; ++li){
+                        int i = li;
+                        int xx = x * outStride + i - filterSize / 2;
+                        if(xx < 0 || xx >= width * outStride){
+                            continue;
                         }
-                        for(int fi = 0; fi < filter.length; ++fi){
-                            for(int fj = 0; fj < filter[fi].length; ++fj){
-                                result[fj][xx][yy] += img[fj][x][y] * 
-                                        filter[fi][fj][i][j];
+
+                        for(int j = 0; j < filter[0][0][0].length; ++j){
+                            int yy = y * outStride + j - filterSize / 2;
+                            if(yy < 0 || yy >= height * outStride){
+                                continue;
+                            }
+                            for(int fi = 0; fi < filter.length; ++fi){
+                                result[ch][xx][yy] += img[ch][x][y] * 
+                                        filter[fi][ch][i][j];
                             }
                         }
-                    });
+                    }
                 }
             }
-        }
+        });
         return result;
     }
         

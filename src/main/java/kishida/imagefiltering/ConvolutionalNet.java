@@ -9,9 +9,13 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.stream.IntStream;
+import javax.imageio.ImageIO;
 
 /**
  *
@@ -31,9 +35,69 @@ public class ConvolutionalNet {
         boolean inverse;
     }
     
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        //一段目のフィルタとバイアス
+        //二段目のフィルタとバイアス
+        //全結合1とバイアス
+        //全結合2とバイアス
+        
+        
+        Path p = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg\\DSC06399.JPG");
+        BufferedImage readImg = ImageIO.read(p.toFile());
+        double[][][] readData = imageToArray(readImg);
+        //一段目のフィルタをかける
+        //プーリング
+        //二段目のフィルタをかける
+        //プーリング
+        //全結合一段
+        //全結合二段
+        
+        //全結合二段の逆伝播
+        //全結合一段の逆伝播
+        //プーリングの逆伝播
+        //二段目のフィルタの逆伝播
+        //プーリングの逆伝播
+        //一段目のフィルタの逆伝播
+        
+        //一段目のフィルタの表示
+        //フィルタ後の表示
+        //全結合一段の表示
+        //全結合二段の表示
         
     }
+    
+    /** 畳み込みフィルタを適用する */
+    static double[][][] applyFilter(double[][][] img, double[][][][] filter, double[] bias, int inStride) {
+        int width = img[0].length;
+        int height = img[0][0].length;
+        int filterSize = filter[0][0].length;
+        double[][][] result = new double[filter.length][width / inStride][height / inStride];
+        IntStream.range(0, filter.length).parallel().forEach(fi ->{
+            for(int x = 0; x < width / inStride; ++x){
+                for(int y = 0; y < height / inStride; ++y){
+                    for(int ch = 0; ch < filter[fi].length; ++ch){
+                        for(int i = 0; i < filter[0][0].length; ++i){
+                            int xx = x * inStride + i - filterSize / 2;
+                            if(xx < 0 || xx >= width){
+                                continue;
+                            }
+                            for(int j = 0; j < filter[0][0][0].length; ++j){
+                                int yy = y * inStride + j - filterSize / 2;
+                                if(yy < 0 || yy >= height){
+                                    continue;
+                                }
+                                result[fi][x][y] += img[ch][xx][yy] * 
+                                        filter[fi][ch][i][j];
+                            }
+                        }
+                    }
+                    result[fi][x][y] += bias[fi];
+                }
+            }
+        });
+        return result;
+    }
+    
     /** 畳み込み層の学習 */
     static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[] bias, double[][][] input, int step ){
         IntStream.range(0, filters.length).parallel().forEach(f -> {
@@ -60,7 +124,79 @@ public class ConvolutionalNet {
             }
         });
     }
+    
+    /** プーリング層(max) */
+    static double[][][] pooling(double[][][] data, int size){
+        double[][][] result = new double[data.length][data[0].length][data[0][0].length];
+        IntStream.range(0, data.length).parallel().forEach(ch -> {
+            for(int x = 0; x < data[0].length; ++x){
+                for(int y = 0; y < data[0][0].length; ++y){
+                    double max = Double.NEGATIVE_INFINITY;
+                    for(int i = 0; i < size; ++i){
+                        int xx = x + i - size / 2;
+                        if(xx < 0 || xx >= data[0].length){
+                            continue;
+                        }
+                        for(int j = 0; j < size; ++j){
+                            int yy = y + j - size / 2;
+                            if(yy < 0 || yy >= data[0][0].length){
+                                continue;
+                            }
+                            if(max < data[ch][xx][yy]){
+                                max = data[ch][xx][yy];
+                            }
+                        }
+                    }
+                    result[ch][x][y] = max;
+                }
+            }
+        });
+        return result;
+    }
 
+    static double[][][] backwordPooling(double[][][] in, double[][][] delta, int size){
+        double[][][] result = new double[in.length][in[0].length][in[0][0].length];
+        IntStream.range(0, in.length).parallel().forEach(ch -> {
+            for(int x = 0; x < in[0].length; ++x){
+                for(int y = 0; y < in[0][0].length; ++y){
+                    double max = Double.NEGATIVE_INFINITY;
+                    int maxX = 0;
+                    int maxY = 0;
+                    for(int i = 0; i < size; ++i){
+                        int xx = x + i - size / 2;
+                        if(xx < 0 || xx >= in[0].length){
+                            continue;
+                        }
+                        for(int j = 0; j < size; ++j){
+                            int yy = y + j - size / 2;
+                            if(yy < 0 || yy >= in[0][0].length){
+                                continue;
+                            }
+                            if(max < in[ch][xx][yy]){
+                                max = in[ch][xx][yy];
+                                maxX = xx;
+                                maxY = yy;
+                            }
+                        }
+                    }
+                    result[ch][x][y] = delta[ch][maxX][maxY];
+                }
+            }
+        });
+        
+        
+        return result;
+    }
+    
+    static double[] softMax(double[] output){
+        double total = Arrays.stream(output).parallel()
+                .map(d -> Math.exp(d))
+                .sum();
+        return Arrays.stream(output).parallel()
+                .map(d -> Math.exp(d) / total)
+                .toArray();
+    }
+    
     static Random r = new Random();
     static double[][] createRandomFilter(int size){
         double [][] result = new double[size][size];
@@ -103,39 +239,7 @@ public class ConvolutionalNet {
         g.dispose();
         return img;
     }    
-    
-    /** 畳み込みフィルタを適用する */
-    static double[][][] applyFilter(double[][][] img, double[][][][] filter, double[] bias, int inStride) {
-        int width = img[0].length;
-        int height = img[0][0].length;
-        int filterSize = filter[0][0].length;
-        double[][][] result = new double[filter.length][width / inStride][height / inStride];
-        IntStream.range(0, filter.length).parallel().forEach(fi ->{
-            for(int x = 0; x < width / inStride; ++x){
-                for(int y = 0; y < height / inStride; ++y){
-                    for(int ch = 0; ch < filter[fi].length; ++ch){
-                        for(int i = 0; i < filter[0][0].length; ++i){
-                            int xx = x * inStride + i - filterSize / 2;
-                            if(xx < 0 || xx >= width){
-                                continue;
-                            }
-                            for(int j = 0; j < filter[0][0][0].length; ++j){
-                                int yy = y * inStride + j - filterSize / 2;
-                                if(yy < 0 || yy >= height){
-                                    continue;
-                                }
-                                result[fi][x][y] += img[ch][xx][yy] * 
-                                        filter[fi][ch][i][j];
-                            }
-                        }
-                    }
-                    result[fi][x][y] += bias[fi];
-                }
-            }
-        });
-        return result;
-    }
-    
+        
     static BufferedImage arrayToImage(double[][][] filteredData) {
         BufferedImage filtered = new BufferedImage(
                 filteredData[0].length, filteredData[0][0].length,

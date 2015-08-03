@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.DoubleSummaryStatistics;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
@@ -78,6 +79,13 @@ public class ConvolutionalNet {
                         result[fi][x][y] += bias[fi];
                     }
                 }
+                for(int x = 0; x < width / stride; ++x){
+                    for(int y = 0; y < height / stride; ++y){
+                        if(result[fi][x][y] < 0){
+                            result[fi][x][y] = 0;
+                        }
+                    }
+                }
             });
             return result;
         }
@@ -108,6 +116,25 @@ public class ConvolutionalNet {
                 }
             });
         }
+    }
+    
+    static double[][][] norm(double[][][] data){
+        double[][][] result = new double[data.length][data[0].length][data[0][0].length];
+        for(int i = 0; i < data.length; ++i){
+            DoubleSummaryStatistics st = Arrays.stream(data[i])
+                    .flatMapToDouble(Arrays::stream)
+                    .summaryStatistics();
+            double average = st.getAverage();
+            double max = st.getMax();
+            double min = st.getMin();
+            double range = Math.max(max - average, average - min);
+            for(int j = 0; j < data[i].length; ++j){
+                for(int k = 0; k < data[i][j].length; ++k){
+                    result[i][j][k] = (data[i][j][k] - average) / range;
+                }
+            }
+        }
+        return result;
     }
     
     static class MaxPoolingLayer{
@@ -189,7 +216,7 @@ public class ConvolutionalNet {
         public FullyConnect(int in, int out) {
             this.out = out;
             weight = Stream.generate(() -> 
-                    DoubleStream.generate(r::nextDouble).limit(out).toArray()
+                    DoubleStream.generate(() -> r.nextDouble() * 2 - 1).limit(out).toArray()
             ).limit(in).toArray(len -> new double[len][]);
             bias = r.nextDouble();
         }
@@ -222,24 +249,32 @@ public class ConvolutionalNet {
         //全結合2
         FullyConnect fc2 = new FullyConnect(32, 8);
         
-        Path p = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg\\DSC06399.JPG");
+        Path p = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg\\cat\\DSC00800.JPG");
         BufferedImage readImg = ImageIO.read(p.toFile());
         BufferedImage resized = resize(readImg, 256, 256);
-        double[][][] readData = imageToArray(resized);
+        double[][][] readData = norm(imageToArray(resized));
         //一段目のフィルタをかける
         double[][][] filterd1 = conv1.applyFilter(readData);
         //プーリング
-        double[][][] pooled1 = pool1.pooling(filterd1);
+        double[][][] pooled1 = norm(pool1.pooling(filterd1));
         //二段目のフィルタをかける
         double[][][] filtered2 = conv2.applyFilter(pooled1);
         //プーリング
-        double[][][] pooled2 = pool2.pooling(filtered2);
+        double[][][] pooled2 = norm(pool2.pooling(filtered2));
+        
+        System.out.println(Arrays.stream(filtered2[0])
+                .map(da -> Arrays.stream(da)
+                        .mapToObj(d -> String.format("%.3f", d))
+                        .collect(Collectors.joining(",")))
+                .collect(Collectors.joining("\n")));
         double[] flattenPooled2 = flatten(pooled2);
         System.out.println(flattenPooled2.length);
         //全結合一段
         double[] fc1out = fc1.forward(flattenPooled2);
+        double[] re = Arrays.stream(fc1out).map(d -> d > 0 ? d : 0).toArray();
         //全結合二段
-        double[] fc2out = fc2.forward(fc1out);
+        double[] fc2out = fc2.forward(re);
+        System.out.println(Arrays.stream(fc2out).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //ソフトマックス
         double[] output = softMax(fc2out);
         System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
@@ -275,7 +310,7 @@ public class ConvolutionalNet {
         double [][] result = new double[size][size];
         for(int i = 0; i < size; ++i){
             for(int j = 0; j < size; ++j){
-                result[i][j] = r.nextDouble();
+                result[i][j] = r.nextDouble() * 2 - 1;
             }
         }
 

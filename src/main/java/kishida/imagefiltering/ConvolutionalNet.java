@@ -132,18 +132,14 @@ public class ConvolutionalNet {
                 average = st.getAverage();
                 range = st.getMax() - average;
                 if(range == 0){
-                    for(int j = 0; j < data[i].length; ++j){
-                        for(int k = 0; k < data[i][j].length; ++k){
-                            result[i][j][k] = (data[i][j][k] - average);
-                        }
-                    }
-                } else {
-                    for(int j = 0; j < data[i].length; ++j){
-                        for(int k = 0; k < data[i][j].length; ++k){
-                            result[i][j][k] = (data[i][j][k] - average) / range;
-                        }
-                    }
+					// rangeが0になるようであれば、割らないようにする
+					range = 1;
                 }
+				for(int j = 0; j < data[i].length; ++j){
+					for(int k = 0; k < data[i][j].length; ++k){
+						result[i][j][k] = (data[i][j][k] - average) / range;
+					}
+				}
 
             }
             return result;

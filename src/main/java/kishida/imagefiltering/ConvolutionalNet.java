@@ -92,7 +92,17 @@ public class ConvolutionalNet {
         }
 
         /** 畳み込み層の学習 */
-        void learn(double[][][] input, double[][][] delta){
+        double[][][] learn(double[][][] input, double[][][] delta){
+            double[][][] result = new double[input.length][input[0].length][input[0][0].length];
+            double[][][][] oldfilter = new double[filter.length][filter[0].length][filter[0][0].length][];
+            for(int f = 0; f < filter.length; ++f){
+                for(int ch = 0; ch < filter[f].length; ++ch){
+                    for(int i = 0; i < filter[f][ch].length; ++i){
+                        oldfilter[f][ch][i] = Arrays.copyOf(filter[f][ch][i], filter[f][ch][i].length);
+                    }
+                }
+            }
+            
             IntStream.range(0, filter.length).parallel().forEach(f -> {
                 for(int ch = 0; ch < filter[0].length; ++ch){
                     for(int x = 0; x < input[0].length / stride; ++x){
@@ -108,6 +118,7 @@ public class ConvolutionalNet {
                                         continue;
                                     }
                                     double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y];
+                                    result[ch][i][j] += d * oldfilter[f][ch][i][j];
                                     filter[f][ch][i][j] += d * ep;
                                 }
                             }
@@ -116,6 +127,7 @@ public class ConvolutionalNet {
                     }
                 }
             });
+            return result;
         }
     }
     
@@ -132,14 +144,14 @@ public class ConvolutionalNet {
                 average = st.getAverage();
                 range = st.getMax() - average;
                 if(range == 0){
-					// rangeが0になるようであれば、割らないようにする
-					range = 1;
+                    // rangeが0になるようであれば、割らないようにする
+                    range = 1;
                 }
-				for(int j = 0; j < data[i].length; ++j){
-					for(int k = 0; k < data[i][j].length; ++k){
-						result[i][j][k] = (data[i][j][k] - average) / range;
-					}
-				}
+                for(int j = 0; j < data[i].length; ++j){
+                    for(int k = 0; k < data[i][j].length; ++k){
+                        result[i][j][k] = (data[i][j][k] - average) / range;
+                    }
+                }
 
             }
             return result;
@@ -251,6 +263,24 @@ public class ConvolutionalNet {
                 result[j] += bias;
             }
             
+            return result;
+        }
+        public double[] backward(double[] in, double[] delta){
+            double[][] oldweight = new double[weight.length][];
+            for(int i = 0; i < weight.length; ++i){
+                oldweight[i] = Arrays.copyOf(weight[i], weight[i].length);
+            }
+            double[] result = new double[in.length];
+            
+            for(int j = 0; j < out; ++j){
+                for(int i = 0; i < in.length; ++i){
+                    double d = (in[i] > 0 ? 1 : 0) * delta[j];
+                    result[i] = d * oldweight[i][j];
+                    weight[i][j] += d * ep;
+                    
+                }
+                bias += delta[j] * ep;
+            }
             return result;
         }
     }

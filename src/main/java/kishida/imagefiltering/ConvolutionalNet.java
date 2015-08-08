@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package kishida.imagefiltering;
 
 import java.awt.Graphics;
@@ -104,6 +99,7 @@ public class ConvolutionalNet {
             this.stride = stride;
         }
         /** 畳み込みフィルタを適用する */
+        @Override
         double[][][] forward(double[][][] img) {
             int width = img[0].length;
             int height = img[0][0].length;
@@ -215,15 +211,15 @@ public class ConvolutionalNet {
         }
         @Override
         double[][][] backword(double[][][] in, double[][][] data){
-            double[][][] result = new double[data.length][data[0].length][data[0][0].length];
+            double[][][] newDelta = new double[data.length][data[0].length][data[0][0].length];
             for(int i = 0; i < data.length; ++i){
                 for(int j = 0; j < data[i].length; ++j){
                     for(int k = 0; k < data[i][j].length; ++k){
-                        result[i][j][k] = data[i][j][k] * range + average;
+                        newDelta[i][j][k] = data[i][j][k] * range + average;
                     }
                 }
             }
-            return result;
+            return newDelta;
         }
     }
     
@@ -269,7 +265,7 @@ public class ConvolutionalNet {
 
         @Override
         double[][][] backword(double[][][] in, double[][][] delta){
-            double[][][] result = new double[in.length][in[0].length][in[0][0].length];
+            double[][][] newDelta = new double[in.length][in[0].length][in[0][0].length];
             IntStream.range(0, in.length).parallel().forEach(ch -> {
                 for(int x = 0; x < in[0].length / stride; ++x){
                     for(int y = 0; y < in[0][0].length / stride; ++y){
@@ -293,13 +289,13 @@ public class ConvolutionalNet {
                                 }
                             }
                         }
-                        result[ch][maxX][maxY] = delta[ch][x][y];
+                        newDelta[ch][maxX][maxY] = delta[ch][x][y];
                     }
                 }
             });
 
 
-            return result;
+            return newDelta;
         }
     }
     
@@ -358,25 +354,18 @@ public class ConvolutionalNet {
         InputFilter input = new InputFilter();
         layers.add(input);
         //一段目
-        ConvolutionLayer conv1 = new ConvolutionLayer("norm1", 48, 3, 11, 4);
-        layers.add(conv1);
+        layers.add(new ConvolutionLayer("norm1", 48, 3, 11, 4));
         //一段目のプーリング
-        MaxPoolingLayer pool1 = new MaxPoolingLayer("pool1", 3, 2);
-        layers.add(pool1);
+        layers.add(new MaxPoolingLayer("pool1", 3, 2));
         //一段目の正規化
-        Normalize norm1 = new Normalize("norm1");
-        layers.add(norm1);
+        layers.add(new Normalize("norm1"));
         //二段目
-        ConvolutionLayer conv2 = new ConvolutionLayer("conv2", 96, 48, 5, 2);
-        layers.add(conv2);
+        layers.add(new ConvolutionLayer("conv2", 96, 48, 5, 2));
         //二段目のプーリング
-        MaxPoolingLayer pool2 = new MaxPoolingLayer("pool2", 3, 2);
-        layers.add(pool2);
+        layers.add(new MaxPoolingLayer("pool2", 3, 2));
         
         Normalize norm2 = new Normalize("norm2");
         layers.add(norm2);
-        
-        
         
         //全結合1
         FullyConnect fc1 = new FullyConnect(6144, 32);

@@ -269,7 +269,7 @@ public class ConvolutionalNet {
 
         @Override
         double[][][] backword(double[][][] in, double[][][] delta){
-            double[][][] result = new double[in.length][in[0].length / stride][in[0][0].length / stride];
+            double[][][] result = new double[in.length][in[0].length][in[0][0].length];
             IntStream.range(0, in.length).parallel().forEach(ch -> {
                 for(int x = 0; x < in[0].length / stride; ++x){
                     for(int y = 0; y < in[0][0].length / stride; ++y){
@@ -293,7 +293,7 @@ public class ConvolutionalNet {
                                 }
                             }
                         }
-                        result[ch][x][y] = delta[ch][maxX][maxY];
+                        result[ch][maxX][maxY] = delta[ch][x][y];
                     }
                 }
             });
@@ -433,8 +433,13 @@ public class ConvolutionalNet {
         
         double[][][] deltaFc1Dim3 = divide3dim(deltaFc1, norm2.result[0].length, norm2.result[0][0].length);
         //プーリングの逆伝播
-        for(int i = layers.size() - 2; i >= 0; --i){
+        for(int i = layers.size() - 1; i >= 1; --i){
+            try{
             deltaFc1Dim3 = layers.get(i).backword(deltaFc1Dim3);
+            }catch(Exception ex){
+                System.out.println(layers.get(i).name + ":" + ex.getLocalizedMessage());
+                throw ex;
+            }
         }
         /*
         double[][][] deltaNorm2 = norm2.backword(null, deltaFc1Dim3);

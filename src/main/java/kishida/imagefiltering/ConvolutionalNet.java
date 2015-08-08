@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
@@ -40,14 +41,62 @@ public class ConvolutionalNet {
         boolean inverse;
     }
     
+    static abstract class ImageNouralLayer{
+        String name;
+        double[][][] result;
+        ImageNouralLayer preLayer;
+
+        public ImageNouralLayer(String name) {
+            this.name = name;
+        }
+        
+        double[][][] forward(){
+            return forward(preLayer.result);
+        }
+        double[][][] backword(double[][][] delta){
+            return backword(preLayer.result, delta);
+        }
+        
+        abstract double[][][] forward(double[][][] in);
+        abstract double[][][] backword(double[][][] in, double[][][] delta);
+
+        public String getName() {
+            return name;
+        }
+
+        public double[][][] getResult() {
+            return result;
+        }
+        
+    }
+    
+    static class InputFilter extends ImageNouralLayer{
+
+        public InputFilter() {
+            super("入力");
+        }
+
+        @Override
+        double[][][] forward(double[][][] in) {
+            this.result = in;
+            return result;
+        }
+
+        @Override
+        double[][][] backword(double[][][] in, double[][][] delta) {
+            // do nothing
+            return null;
+        }
+        
+    }
+    
     /** 畳み込み層 */
-    static class ConvolutionLayer{
+    static class ConvolutionLayer extends ImageNouralLayer{
         double[][][][] filter;
         double[] bias;
         int stride;
-        String name;
         public ConvolutionLayer(String name, int filterCount, int channel, int size, int stride) {
-            this.name = name;
+            super(name);
             this.filter = Stream.generate(() -> Stream.generate(() -> createRandomFilter(size))
                             .limit(channel).toArray(len -> new double[len][][]))
                         .limit(filterCount).toArray(len -> new double[len][][][]);
@@ -55,11 +104,11 @@ public class ConvolutionalNet {
             this.stride = stride;
         }
         /** 畳み込みフィルタを適用する */
-        double[][][] applyFilter(double[][][] img) {
+        double[][][] forward(double[][][] img) {
             int width = img[0].length;
             int height = img[0][0].length;
             int filterSize = filter[0][0].length;
-            double[][][] result = new double[filter.length][width / stride][height / stride];
+            result = new double[filter.length][width / stride][height / stride];
             IntStream.range(0, filter.length).parallel().forEach(fi ->{
                 for(int x = 0; x < width / stride; ++x){
                     for(int y = 0; y < height / stride; ++y){
@@ -94,8 +143,9 @@ public class ConvolutionalNet {
         }
 
         /** 畳み込み層の学習 */
-        double[][][] learn(double[][][] input, double[][][] delta){
-            double[][][] result = new double[input.length][input[0].length][input[0][0].length];
+        @Override
+        double[][][] backword(double[][][] input, double[][][] delta){
+            double[][][] newDelta = new double[input.length][input[0].length][input[0][0].length];
             double[][][][] oldfilter = new double[filter.length][filter[0].length][filter[0][0].length][];
             for(int f = 0; f < filter.length; ++f){
                 for(int ch = 0; ch < filter[f].length; ++ch){
@@ -120,7 +170,7 @@ public class ConvolutionalNet {
                                         continue;
                                     }
                                     double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y];
-                                    result[ch][i][j] += d * oldfilter[f][ch][i][j];
+                                    newDelta[ch][i][j] += d * oldfilter[f][ch][i][j];
                                     filter[f][ch][i][j] += d * ep;
                                 }
                             }
@@ -129,16 +179,21 @@ public class ConvolutionalNet {
                     }
                 }
             });
-            return result;
+            return newDelta;
         }
     }
     
-    static class Normalize{
+    static class Normalize extends ImageNouralLayer{
         double range;
         double average;
+
+        public Normalize(String name) {
+            super(name);
+        }
         
-        double[][][] norm(double[][][] data){
-            double[][][] result = new double[data.length][data[0].length][data[0][0].length];
+        @Override
+        double[][][] forward(double[][][] data){
+            result = new double[data.length][data[0].length][data[0][0].length];
             for(int i = 0; i < data.length; ++i){
                 DoubleSummaryStatistics st = Arrays.stream(data[i])
                         .flatMapToDouble(Arrays::stream)
@@ -158,7 +213,8 @@ public class ConvolutionalNet {
             }
             return result;
         }
-        double[][][] backword(double[][][] data){
+        @Override
+        double[][][] backword(double[][][] in, double[][][] data){
             double[][][] result = new double[data.length][data[0].length][data[0][0].length];
             for(int i = 0; i < data.length; ++i){
                 for(int j = 0; j < data[i].length; ++j){
@@ -172,17 +228,19 @@ public class ConvolutionalNet {
     }
     
     
-    static class MaxPoolingLayer{
+    static class MaxPoolingLayer extends ImageNouralLayer{
         int size;
         int stride;
 
-        public MaxPoolingLayer(int size, int stride) {
+        public MaxPoolingLayer(String name, int size, int stride) {
+            super(name);
             this.size = size;
             this.stride = stride;
         }
         /** プーリング(max) */
-        double[][][] pooling(double[][][] data){
-            double[][][] result = new double[data.length][data[0].length / stride][data[0][0].length / stride];
+        @Override
+        double[][][] forward(double[][][] data){
+            result = new double[data.length][data[0].length / stride][data[0][0].length / stride];
             IntStream.range(0, data.length).parallel().forEach(ch -> {
                 for(int x = 0; x < data[0].length / stride; ++x){
                     for(int y = 0; y < data[0][0].length / stride; ++y){
@@ -209,7 +267,8 @@ public class ConvolutionalNet {
             return result;
         }
 
-        double[][][] backwordPooling(double[][][] in, double[][][] delta){
+        @Override
+        double[][][] backword(double[][][] in, double[][][] delta){
             double[][][] result = new double[in.length][in[0].length / stride][in[0][0].length / stride];
             IntStream.range(0, in.length).parallel().forEach(ch -> {
                 for(int x = 0; x < in[0].length / stride; ++x){
@@ -295,19 +354,29 @@ public class ConvolutionalNet {
                 .filter(p -> Files.isDirectory(p))
                 .map(p -> p.getFileName().toString())
                 .collect(Collectors.toList());
-                
+        List<ImageNouralLayer> layers = new ArrayList<>();
+        InputFilter input = new InputFilter();
+        layers.add(input);
         //一段目
         ConvolutionLayer conv1 = new ConvolutionLayer("norm1", 48, 3, 11, 4);
+        layers.add(conv1);
         //一段目のプーリング
-        MaxPoolingLayer pool1 = new MaxPoolingLayer(3, 2);
+        MaxPoolingLayer pool1 = new MaxPoolingLayer("pool1", 3, 2);
+        layers.add(pool1);
         //一段目の正規化
-        Normalize norm1 = new Normalize();
+        Normalize norm1 = new Normalize("norm1");
+        layers.add(norm1);
         //二段目
-        ConvolutionLayer conv2 = new ConvolutionLayer("norm2", 96, 48, 5, 2);
+        ConvolutionLayer conv2 = new ConvolutionLayer("conv2", 96, 48, 5, 2);
+        layers.add(conv2);
         //二段目のプーリング
-        MaxPoolingLayer pool2 = new MaxPoolingLayer(3, 2);
+        MaxPoolingLayer pool2 = new MaxPoolingLayer("pool2", 3, 2);
+        layers.add(pool2);
         
-        Normalize norm2 = new Normalize();
+        Normalize norm2 = new Normalize("norm2");
+        layers.add(norm2);
+        
+        
         
         //全結合1
         FullyConnect fc1 = new FullyConnect(6144, 32);
@@ -326,17 +395,25 @@ public class ConvolutionalNet {
         BufferedImage readImg = ImageIO.read(p.toFile());
         BufferedImage resized = resize(readImg, 256, 256);
         double[][][] readData = norm0(imageToArray(resized));
+        
+        input.result = readData;
+        for(int i = 1; i < layers.size(); ++i){
+            layers.get(i).preLayer = layers.get(i - 1);
+            layers.get(i).forward();
+        }
+        /*
         //一段目のフィルタをかける
-        double[][][] filtered1 = conv1.applyFilter(readData);
+        double[][][] filtered1 = conv1.forward(readData);
         //プーリング
-        double[][][] pooled1 = pool1.pooling(filtered1);
-        double[][][] pooled1norm = norm1.norm(pooled1);
+        double[][][] pooled1 = pool1.forward(filtered1);
+        double[][][] pooled1norm = norm1.forward(pooled1);
         //二段目のフィルタをかける
-        double[][][] filtered2 = conv2.applyFilter(pooled1norm);
+        double[][][] filtered2 = conv2.forward(pooled1norm);
         //プーリング
-        double[][][] pooled2 = pool2.pooling(filtered2);
-        double[][][] pooled2norm = norm2.norm(pooled2);
-        double[] flattenPooled2 = flatten(pooled2norm);
+        double[][][] pooled2 = pool2.forward(filtered2);
+        double[][][] pooled2norm = norm2.forward(pooled2);
+        */
+        double[] flattenPooled2 = flatten(norm2.getResult());
         //全結合一段
         double[] fc1out = fc1.forward(flattenPooled2);
         double[] re = Arrays.stream(fc1out).map(d -> d > 0 ? d : 0).toArray();
@@ -354,19 +431,29 @@ public class ConvolutionalNet {
         //全結合一段の逆伝播
         double[] deltaFc1 = fc1.backward(flattenPooled2, deltaFc2);
         
-        double[][][] deltaFc1Dim3 = divide3dim(deltaFc1, pooled2norm[0].length, pooled2norm[0][0].length);
-        printDim("deltaFc1Dim3", deltaFc1Dim3);
-        printDim("filtered2", filtered2);
+        double[][][] deltaFc1Dim3 = divide3dim(deltaFc1, norm2.result[0].length, norm2.result[0][0].length);
         //プーリングの逆伝播
-        double[][][] deltaNorm2 = norm2.backword(deltaFc1Dim3);
+        for(int i = layers.size() - 2; i >= 0; --i){
+            deltaFc1Dim3 = layers.get(i).backword(deltaFc1Dim3);
+        }
+        /*
+        double[][][] deltaNorm2 = norm2.backword(null, deltaFc1Dim3);
         printDim("deltaNorm2", deltaNorm2);
-        double[][][] deltaPool2 = pool2.backwordPooling(filtered2, deltaNorm2);
+        double[][][] deltaPool2 = pool2.backword(filtered2, deltaNorm2);
         //二段目のフィルタの逆伝播
-        double[][][] deltaConv2 = conv2.learn(pooled1norm, deltaPool2);
+        double[][][] deltaConv2 = conv2.backword(pooled1norm, deltaPool2);
         //プーリングの逆伝播
-        double[][][] deltaPool1 = pool1.backwordPooling(filtered1, norm1.backword(deltaConv2));
+        double[][][] deltaPool1 = pool1.backword(filtered1, norm1.backword(null, deltaConv2));
+        
         //一段目のフィルタの逆伝播
-        conv1.learn(readData, deltaPool1);
+        double[][][] all1 = Arrays.stream(readData).map(ch -> 
+                Arrays.stream(ch).map(row -> 
+                        Arrays.stream(row).map(d -> 1)
+                                .toArray())
+                        .toArray(size -> new double[size][]))
+                .toArray(size -> new double[size][][]);
+        conv1.backword(all1, deltaPool1);
+        */
         //一段目のフィルタの表示
         
         //フィルタ後の表示

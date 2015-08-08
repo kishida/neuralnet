@@ -8,11 +8,13 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
 import java.util.Random;
@@ -32,7 +34,7 @@ import javax.swing.JPanel;
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.000000001;
+    static final double ep = 0.0000000001;
 
     static class Img{
 
@@ -101,8 +103,8 @@ public class ConvolutionalNet {
         public ConvolutionLayer(String name, int filterCount, int channel, int size, int stride) {
             super(name);
             this.filter = Stream.generate(() -> Stream.generate(() -> createRandomFilter(size))
-                            .limit(channel).toArray(len -> new double[len][][]))
-                        .limit(filterCount).toArray(len -> new double[len][][][]);
+                            .limit(channel).toArray(double[][][]::new))
+                        .limit(filterCount).toArray(double[][][][]::new);
             this.bias = DoubleStream.generate(() -> r.nextDouble()).limit(filterCount).toArray();
             this.stride = stride;
         }
@@ -316,7 +318,7 @@ public class ConvolutionalNet {
             this.out = out;
             weight = Stream.generate(() -> 
                     DoubleStream.generate(() -> r.nextDouble() * 2 - 1).limit(out).toArray()
-            ).limit(in).toArray(len -> new double[len][]);
+            ).limit(in).toArray(double[][]::new);
             bias = r.nextDouble();
         }
         
@@ -384,30 +386,39 @@ public class ConvolutionalNet {
         //全結合2
         FullyConnect fc2 = new FullyConnect(32, categories.size());
         
-        Path p = dir.resolve("cat\\DSC00800.JPG");
-        String catName = p.getParent().getFileName().toString();
-        double[] correctData = categories.stream()
-                .mapToDouble(name -> name.equals(catName) ? 1 : 0)
-                .toArray();
-        
-        BufferedImage readImg = ImageIO.read(p.toFile());
-        BufferedImage resized = resize(readImg, 256, 256);
-        double[][][] readData = norm0(imageToArray(resized));
+        //Path p = dir.resolve("cat\\DSC00800.JPG");
+        List<Path> files = Files.walk(dir).filter(p -> !Files.isDirectory(p)).collect(Collectors.toList());
+        Collections.shuffle(files);
+        files.stream().forEach(p -> {
+            String catName = p.getParent().getFileName().toString();
+            double[] correctData = categories.stream()
+                    .mapToDouble(name -> name.equals(catName) ? 1 : 0)
+                    .toArray();
 
-        //元画像の表示
-        org.setIcon(new ImageIcon(resized));
-        
-        double[] output = forward(layers, fc1, fc2, readData, correctData);
-        //一段目のフィルタの表示
-        ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
-        for(int i = 0; i < conv1.filter.length; ++i){
-            filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter[i]), 44, 44, false, false)));
-        }
-        //フィルタ後の表示
-        //全結合一段の表示
-        firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.result)));
-        //全結合二段の表示
-        lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
+            BufferedImage readImg;
+            try {
+                readImg = ImageIO.read(p.toFile());
+            } catch (IOException ex) {
+                throw new UncheckedIOException(ex);
+            }
+            BufferedImage resized = resize(readImg, 256, 256);
+            double[][][] readData = norm0(imageToArray(resized));
+
+            //元画像の表示
+            org.setIcon(new ImageIcon(resized));
+
+            double[] output = forward(layers, fc1, fc2, readData, correctData);
+            //一段目のフィルタの表示
+            ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
+            for(int i = 0; i < conv1.filter.length; ++i){
+                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter[i]), 44, 44, false, false)));
+            }
+            //フィルタ後の表示
+            //全結合一段の表示
+            firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.result)));
+            //全結合二段の表示
+            lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
+        });
     }
     
     static Image createGraph(int width, int height, double[] data){
@@ -435,7 +446,7 @@ public class ConvolutionalNet {
     static JLabel firstFc = new JLabel();
     static JLabel lastResult = new JLabel();
     static JLabel[] filtersLabel = Stream.generate(() -> new JLabel()).limit(48)
-            .toArray(size -> new JLabel[size]);
+            .toArray(JLabel[]::new);
     
     static JFrame createFrame(){
         JFrame f = new JFrame("畳み込みニューラルネット");
@@ -497,7 +508,7 @@ public class ConvolutionalNet {
         System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //全結合二段の逆伝播
         double[] delta = IntStream.range(0, output.length)
-                .mapToDouble(idx -> correctData[idx] - output[idx])
+                .mapToDouble(idx -> -(correctData[idx] - output[idx]))
                 .toArray();
         double[] deltaFc2 = fc2.backward(re, delta);
         //全結合一段の逆伝播
@@ -567,8 +578,8 @@ public class ConvolutionalNet {
                 Arrays.copyOfRange(data, 
                         i * sec * third +j * third, 
                         i * sec * third + j * third + third)
-            ).toArray(size -> new double[size][])
-        ).toArray(size -> new double[size][][]);
+            ).toArray(double[][]::new)
+        ).toArray(double[][][]::new);
     }
     
     static double[] flatten(double[][][] data){

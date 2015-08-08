@@ -10,10 +10,12 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
@@ -288,6 +290,12 @@ public class ConvolutionalNet {
         return data;
     }
     public static void main(String[] args) throws IOException {
+        Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg");
+        List<String> categories = Files.list(dir)
+                .filter(p -> Files.isDirectory(p))
+                .map(p -> p.getFileName().toString())
+                .collect(Collectors.toList());
+                
         //一段目
         ConvolutionLayer conv1 = new ConvolutionLayer("norm1", 48, 3, 11, 4);
         //一段目のプーリング
@@ -304,9 +312,17 @@ public class ConvolutionalNet {
         //全結合1
         FullyConnect fc1 = new FullyConnect(6144, 32);
         //全結合2
-        FullyConnect fc2 = new FullyConnect(32, 8);
+        FullyConnect fc2 = new FullyConnect(32, categories.size());
         
-        Path p = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg\\cat\\DSC00800.JPG");
+        Path p = dir.resolve("cat\\DSC00800.JPG");
+        String catName = p.getParent().getFileName().toString();
+        
+        System.out.println(catName);
+        double[] correctData = categories.stream()
+                .mapToDouble(name -> name.equals(catName) ? 1 : 0)
+                .toArray();
+        System.out.println(Arrays.toString(correctData));
+        
         BufferedImage readImg = ImageIO.read(p.toFile());
         BufferedImage resized = resize(readImg, 256, 256);
         double[][][] readData = norm0(imageToArray(resized));
@@ -331,12 +347,28 @@ public class ConvolutionalNet {
         double[] output = softMax(fc2out);
         System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //全結合二段の逆伝播
+        double[] delta = IntStream.range(0, output.length)
+                .mapToDouble(idx -> correctData[idx] - output[idx])
+                .toArray();
+        double[] deltaFc2 = fc2.backward(re, delta);
         //全結合一段の逆伝播
+        double[] deltaFc1 = fc1.backward(flattenPooled2, deltaFc2);
+        
+        double[][][] deltaFc1Dim3 = divide3dim(deltaFc1, pooled2norm[0].length, pooled2norm[0][0].length);
+        printDim("deltaFc1Dim3", deltaFc1Dim3);
+        printDim("filtered2", filtered2);
         //プーリングの逆伝播
+        double[][][] deltaNorm2 = norm2.backword(deltaFc1Dim3);
+        printDim("deltaNorm2", deltaNorm2);
+        double[][][] deltaPool2 = pool2.backwordPooling(filtered2, deltaNorm2);
         //二段目のフィルタの逆伝播
+        double[][][] deltaConv2 = conv2.learn(pooled1norm, deltaPool2);
         //プーリングの逆伝播
+        double[][][] deltaPool1 = pool1.backwordPooling(filtered1, norm1.backword(deltaConv2));
         //一段目のフィルタの逆伝播
+        conv1.learn(readData, deltaPool1);
         //一段目のフィルタの表示
+        
         //フィルタ後の表示
         //全結合一段の表示
         //全結合二段の表示
@@ -373,6 +405,16 @@ public class ConvolutionalNet {
 
         
         return result;
+    }
+    
+    static double[][][] divide3dim(double[] data, int sec, int third){
+        return IntStream.range(0, data.length / sec / third).mapToObj(i -> 
+            IntStream.range(0, sec).mapToObj(j -> 
+                Arrays.copyOfRange(data, 
+                        i * sec * third +j * third, 
+                        i * sec * third + j * third + third)
+            ).toArray(size -> new double[size][])
+        ).toArray(size -> new double[size][][]);
     }
     
     static double[] flatten(double[][][] data){

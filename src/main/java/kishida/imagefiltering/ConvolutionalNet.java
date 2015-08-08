@@ -1,7 +1,10 @@
 package kishida.imagefiltering;
 
+import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GridLayout;
+import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -13,11 +16,17 @@ import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.List;
 import java.util.Random;
+import java.util.function.DoubleToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import sun.security.krb5.JavaxSecurityAuthKerberosAccess;
 
 /**
  *
@@ -303,6 +312,7 @@ public class ConvolutionalNet {
         double[][] weight;
         double bias;
         int out;
+        double[] result;
         public FullyConnect(int in, int out) {
             this.out = out;
             weight = Stream.generate(() -> 
@@ -312,7 +322,7 @@ public class ConvolutionalNet {
         }
         
         public double[] forward(double[] in){
-            double[] result = new double[out];
+            result = new double[out];
             for(int j = 0; j < out; ++j){
                 for(int i = 0; i < in.length; ++i){
                     result[j] += in[i] * weight[i][j];
@@ -327,24 +337,27 @@ public class ConvolutionalNet {
             for(int i = 0; i < weight.length; ++i){
                 oldweight[i] = Arrays.copyOf(weight[i], weight[i].length);
             }
-            double[] result = new double[in.length];
+            double[] newDelta = new double[in.length];
             
             for(int j = 0; j < out; ++j){
                 for(int i = 0; i < in.length; ++i){
                     double d = (in[i] > 0 ? 1 : 0) * delta[j];
-                    result[i] = d * oldweight[i][j];
+                    newDelta[i] = d * oldweight[i][j];
                     weight[i][j] += d * ep;
                     
                 }
                 bias += delta[j] * ep;
             }
-            return result;
+            return newDelta;
         }
     }
     static double[][][] norm0(double[][][] data){
         return data;
     }
     public static void main(String[] args) throws IOException {
+        JFrame f = createFrame();
+        f.setVisible(true);
+        
         Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg");
         List<String> categories = Files.list(dir)
                 .filter(p -> Files.isDirectory(p))
@@ -374,18 +387,89 @@ public class ConvolutionalNet {
         
         Path p = dir.resolve("cat\\DSC00800.JPG");
         String catName = p.getParent().getFileName().toString();
-        
-        System.out.println(catName);
         double[] correctData = categories.stream()
                 .mapToDouble(name -> name.equals(catName) ? 1 : 0)
                 .toArray();
-        System.out.println(Arrays.toString(correctData));
         
         BufferedImage readImg = ImageIO.read(p.toFile());
         BufferedImage resized = resize(readImg, 256, 256);
         double[][][] readData = norm0(imageToArray(resized));
+
+        //元画像の表示
+        org.setIcon(new ImageIcon(resized));
         
-        input.result = readData;
+        double[] output = forward(layers, fc1, fc2, readData, correctData);
+        //一段目のフィルタの表示
+        ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
+        for(int i = 0; i < conv1.filter.length; ++i){
+            filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter[i]), 44, 44, false, false)));
+        }
+        //フィルタ後の表示
+        //全結合一段の表示
+        firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.result)));
+        //全結合二段の表示
+        lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
+    }
+    
+    static Image createGraph(int width, int height, double[] data){
+        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = (Graphics2D) result.getGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+        DoubleSummaryStatistics summary = Arrays.stream(data).summaryStatistics();
+        DoubleToIntFunction f = d -> (int)(height - 
+                (d - summary.getMin()) / (summary.getMax() - summary.getMin()) * height);
+        g.setColor(Color.BLACK);
+        g.drawLine(0, f.applyAsInt(0), width, f.applyAsInt(0));
+        for(int i = 0; i < data.length; ++i){
+            int left = i * width / data.length;
+            int bottom = f.applyAsInt(0);
+            int right = (i + 1) * width / data.length;
+            int top = f.applyAsInt(data[i]);
+            g.fillRect(left, Math.min(top, bottom), right - left - 1, Math.abs(bottom - top));
+        }
+        
+        return result;
+    }
+    
+    static JLabel org = new JLabel();
+    static JLabel firstFc = new JLabel();
+    static JLabel lastResult = new JLabel();
+    static JLabel[] filtersLabel = Stream.generate(() -> new JLabel()).limit(48)
+            .toArray(size -> new JLabel[size]);
+    
+    static JFrame createFrame(){
+        JFrame f = new JFrame("畳み込みニューラルネット");
+        f.setLayout(new GridLayout(2, 1));
+        
+        JPanel north = new JPanel();
+        // 上段
+        f.add(north);
+        north.setLayout(new GridLayout(1, 2));
+        north.add(org);
+        // 上段右
+        JPanel northRight = new JPanel();
+        north.add(northRight);
+        northRight.setLayout(new GridLayout(2, 1));
+        northRight.add(firstFc);
+        northRight.add(lastResult);
+        
+        //下段
+        JPanel middle = new JPanel();
+        f.add(middle);
+        middle.setLayout(new GridLayout(6, 8));
+        for(int i = 0; i < filtersLabel.length; ++i){
+            middle.add(filtersLabel[i]);
+        }
+        f.setSize(540, 580);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        return f;
+    }
+    
+    static double[] forward(List<ImageNouralLayer> layers, FullyConnect fc1, FullyConnect fc2,
+            double[][][] readData, double[] correctData){
+        ImageNouralLayer norm2 = layers.get(layers.size() - 1);
+        layers.get(0).result = readData;
         for(int i = 1; i < layers.size(); ++i){
             layers.get(i).preLayer = layers.get(i - 1);
             layers.get(i).forward();
@@ -423,12 +507,7 @@ public class ConvolutionalNet {
         double[][][] deltaFc1Dim3 = divide3dim(deltaFc1, norm2.result[0].length, norm2.result[0][0].length);
         //プーリングの逆伝播
         for(int i = layers.size() - 1; i >= 1; --i){
-            try{
             deltaFc1Dim3 = layers.get(i).backword(deltaFc1Dim3);
-            }catch(Exception ex){
-                System.out.println(layers.get(i).name + ":" + ex.getLocalizedMessage());
-                throw ex;
-            }
         }
         /*
         double[][][] deltaNorm2 = norm2.backword(null, deltaFc1Dim3);
@@ -448,12 +527,7 @@ public class ConvolutionalNet {
                 .toArray(size -> new double[size][][]);
         conv1.backword(all1, deltaPool1);
         */
-        //一段目のフィルタの表示
-        
-        //フィルタ後の表示
-        //全結合一段の表示
-        //全結合二段の表示
-        
+        return output;
     }
     static void printDim(String name, double[][][] data){
         System.out.printf("%s:%dx%dx%d%n", name,
@@ -514,9 +588,9 @@ public class ConvolutionalNet {
 
     
     private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
-        return resize(imgRead, width, height, false);
+        return resize(imgRead, width, height, true, false);
     }
-    private static BufferedImage resize(BufferedImage imgRead, int width, int height, boolean inverse) {
+    private static BufferedImage resize(BufferedImage imgRead, int width, int height, boolean bicubic, boolean inverse) {
         /*
         if(imgRead.getWidth() * height > imgRead.getHeight() * width){
             height = imgRead.getHeight() * width / imgRead.getWidth();
@@ -525,7 +599,9 @@ public class ConvolutionalNet {
         }*/
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics g = img.getGraphics();
-        ((Graphics2D)g).setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        if(bicubic){
+            ((Graphics2D)g).setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        }
         if(inverse){
             g.drawImage(imgRead, width, 0, -width, height, null);
         }else{

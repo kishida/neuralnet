@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -34,7 +35,7 @@ import javax.swing.JPanel;
  */
 public class AutoEncoder {
     static final int stride = 4;
-    static final double ep = 0.000000001;
+    static final double ep = 0.00000001;
 
     static class Img{
 
@@ -137,6 +138,14 @@ public class AutoEncoder {
     static double[][][] supervisedLearn(double[][][] data, double[][][] superviser, double[][][][] filters, double[][][] filtered, int step){
         int width = Math.min(data[0].length, superviser[0].length);
         int height = Math.min(data[0][0].length, superviser[0][0].length);
+        double[][][][] oldfilter = new double[filters.length][filters[0].length][filters[0][0].length][];
+        for(int f = 0; f < filters.length; ++f){
+            for(int ch = 0; ch < filters[f].length; ++ch){
+                for(int i = 0; i < filters[f][ch].length; ++i){
+                    oldfilter[f][ch][i] = Arrays.copyOf(filters[f][ch][i], filters[f][ch][i].length);
+                }
+            }
+        }        
         double[][][]delta = new double[filtered.length][filtered[0].length][filtered[0][0].length];
         IntStream.range(0, filters.length).parallel().forEach(f -> {
             for(int lx = 0; lx < width / step; ++lx){
@@ -159,7 +168,7 @@ public class AutoEncoder {
                                 double c2 = data[ch][xx][yy];
                                 //if(c1 < -1) c1 = -1; if(c1 > 1) c1 = 1;
                                 //if(c2 < -1) c2 =-1; if(c2 > 1) c2 = 1;
-                                double d = (c2 - c1) * (filtered[f][x][y] > 0 ? 1 : 0);
+                                double d = (c2 - c1) * (filtered[f][x][y] > 0 ? 1 : 0) * oldfilter[f][ch][i][j];
                                 delta[f][x][y] += d;
                                 filters[f][ch][i][j] += d * ep;
                             }
@@ -173,6 +182,14 @@ public class AutoEncoder {
     
     /** 畳み込み層の学習 */
     static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[] bias, double[][][] input, int step ){
+        double[][][][] oldfilter = new double[filters.length][filters[0].length][filters[0][0].length][];
+        for(int f = 0; f < filters.length; ++f){
+            for(int ch = 0; ch < filters[f].length; ++ch){
+                for(int i = 0; i < filters[f][ch].length; ++i){
+                    oldfilter[f][ch][i] = Arrays.copyOf(filters[f][ch][i], filters[f][ch][i].length);
+                }
+            }
+        }        
         IntStream.range(0, filters.length).parallel().forEach(f -> {
             for(int ch = 0; ch < filters[0].length; ++ch){
                 for(int x = 0; x < input[0].length / step; ++x){
@@ -187,7 +204,7 @@ public class AutoEncoder {
                                 if(yy < 0 || yy >= input[0][0].length){
                                     continue;
                                 }
-                                double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y];
+                                double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y] * oldfilter[f][ch][i][j];
                                 filters[f][ch][i][j] += d * ep;
                             }
                         }
@@ -242,7 +259,7 @@ public class AutoEncoder {
         double total = 0;
         for(int i = 0; i < size; ++i){
             for(int j = 0; j < size; ++j){
-                result[i][j] = (r.nextDouble() - 0.5) * 2;
+                result[i][j] = r.nextDouble();
                 total += result[i][j];
             }
         }

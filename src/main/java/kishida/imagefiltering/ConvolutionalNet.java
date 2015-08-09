@@ -139,7 +139,7 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction activation) {
+        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction act) {
             // do nothing
             return null;
         }
@@ -190,9 +190,7 @@ public class ConvolutionalNet {
                 }
                 for(int x = 0; x < width / stride; ++x){
                     for(int y = 0; y < height / stride; ++y){
-                        if(result[fi][x][y] < 0){
-                            result[fi][x][y] = 0;
-                        }
+                        result[fi][x][y] = activation.apply(result[fi][x][y]);
                     }
                 }
             });
@@ -201,7 +199,7 @@ public class ConvolutionalNet {
 
         /** 畳み込み層の学習 */
         @Override
-        double[][][] backword(double[][][] input, double[][][] delta, ActivationFunction activation){
+        double[][][] backword(double[][][] input, double[][][] delta, ActivationFunction act){
             double[][][] newDelta = new double[input.length][input[0].length][input[0][0].length];
             double[][][][] oldfilter = Arrays.stream(filter)
                     .map(f -> Arrays.stream(f)
@@ -225,7 +223,7 @@ public class ConvolutionalNet {
                                     if(yy < 0 || yy >= input[0][0].length){
                                         continue;
                                     }
-                                    double d = activation.diff(input[ch][xx][yy]) * delta[f][x][y];
+                                    double d = act.diff(input[ch][xx][yy]) * delta[f][x][y];
                                     newDelta[ch][i][j] += d * oldfilter[f][ch][i][j];
                                     filter[f][ch][i][j] += d * ep;
                                 }
@@ -270,7 +268,7 @@ public class ConvolutionalNet {
             return result;
         }
         @Override
-        double[][][] backword(double[][][] in, double[][][] data, ActivationFunction activation){
+        double[][][] backword(double[][][] in, double[][][] data, ActivationFunction act){
             double[][][] newDelta = new double[data.length][data[0].length][data[0][0].length];
             for(int i = 0; i < data.length; ++i){
                 for(int j = 0; j < data[i].length; ++j){
@@ -324,7 +322,7 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction activation){
+        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction act){
             double[][][] newDelta = new double[in.length][in[0].length][in[0][0].length];
             IntStream.range(0, in.length).parallel().forEach(ch -> {
                 for(int x = 0; x < in[0].length / stride; ++x){
@@ -419,7 +417,7 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction activation) {
+        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction act) {
             return IntStream.range(0, delta.length)
                     .mapToObj(ch -> IntStream.range(0, delta[ch].length)
                         .mapToObj(x -> IntStream.range(0, delta[ch][x].length)
@@ -457,7 +455,7 @@ public class ConvolutionalNet {
             
             return result;
         }
-        public double[] backward(double[] in, double[] delta, ActivationFunction activation){
+        public double[] backward(double[] in, double[] delta, ActivationFunction act){
             double[][] oldweight = Arrays.stream(weight)
                     .map(row -> Arrays.copyOf(row, row.length))
                     .toArray(double[][]::new);
@@ -465,7 +463,7 @@ public class ConvolutionalNet {
             
             for(int j = 0; j < out; ++j){
                 for(int i = 0; i < in.length; ++i){
-                    double d = activation.diff(in[i]) * delta[j];
+                    double d = act.diff(in[i]) * delta[j];
                     newDelta[i] += d * oldweight[i][j];
                     weight[i][j] += d * ep;
                     

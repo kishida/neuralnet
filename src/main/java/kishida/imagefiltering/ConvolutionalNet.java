@@ -46,6 +46,42 @@ public class ConvolutionalNet {
         boolean inverse;
     }
     
+    /** 活性化関数 */
+    interface ActivationFunction{
+        double apply(double value);
+        /** 微分 */
+        double diff(double value);
+    }
+    
+    /** 正規化線形関数 */
+    static class RetifierdLinear implements ActivationFunction{
+
+        @Override
+        public double apply(double value) {
+            return value > 0 ? value : 0;
+        }
+
+        @Override
+        public double diff(double value) {
+            return value > 0 ? 1 : 0;
+        }
+        
+    }
+    /** ロジスティックシグモイド関数 */
+    static class LogisticFunction implements ActivationFunction{
+
+        @Override
+        public double apply(double value) {
+            return 1 / (1 + Math.exp(-value));
+        }
+
+        @Override
+        public double diff(double value) {
+            return value * (1 - value);
+        }
+        
+    }
+    
     static abstract class ImageNouralLayer{
         String name;
         double[][][] result;
@@ -152,14 +188,13 @@ public class ConvolutionalNet {
         @Override
         double[][][] backword(double[][][] input, double[][][] delta){
             double[][][] newDelta = new double[input.length][input[0].length][input[0][0].length];
-            double[][][][] oldfilter = new double[filter.length][filter[0].length][filter[0][0].length][];
-            for(int f = 0; f < filter.length; ++f){
-                for(int ch = 0; ch < filter[f].length; ++ch){
-                    for(int i = 0; i < filter[f][ch].length; ++i){
-                        oldfilter[f][ch][i] = Arrays.copyOf(filter[f][ch][i], filter[f][ch][i].length);
-                    }
-                }
-            }
+            double[][][][] oldfilter = Arrays.stream(filter)
+                    .map(f -> Arrays.stream(f)
+                            .map(ch -> Arrays.stream(ch)
+                                    .map(row -> Arrays.copyOf(row, row.length))
+                                    .toArray(double[][]::new)
+                            ).toArray(double[][][]::new))
+                    .toArray(double[][][][]::new);
             
             IntStream.range(0, filter.length).parallel().forEach(f -> {
                 for(int ch = 0; ch < filter[0].length; ++ch){
@@ -311,15 +346,17 @@ public class ConvolutionalNet {
     
     static class FullyConnect{
         double[][] weight;
-        double bias;
+        double[] bias;
         int out;
         double[] result;
-        public FullyConnect(int in, int out) {
+        String name;
+        public FullyConnect(String name, int in, int out) {
+            this.name = name;
             this.out = out;
             weight = Stream.generate(() -> 
                     DoubleStream.generate(() -> r.nextDouble() * 2 - 1).limit(out).toArray()
             ).limit(in).toArray(double[][]::new);
-            bias = r.nextDouble();
+            bias = DoubleStream.generate(() -> r.nextDouble()).limit(out).toArray();
         }
         
         public double[] forward(double[] in){
@@ -328,29 +365,42 @@ public class ConvolutionalNet {
                 for(int i = 0; i < in.length; ++i){
                     result[j] += in[i] * weight[i][j];
                 }
-                result[j] += bias;
+                result[j] += bias[j];
             }
             
             return result;
         }
         public double[] backward(double[] in, double[] delta){
-            double[][] oldweight = new double[weight.length][];
-            for(int i = 0; i < weight.length; ++i){
-                oldweight[i] = Arrays.copyOf(weight[i], weight[i].length);
-            }
+            double[][] oldweight = Arrays.stream(weight)
+                    .map(row -> Arrays.copyOf(row, row.length))
+                    .toArray(double[][]::new);
             double[] newDelta = new double[in.length];
             
             for(int j = 0; j < out; ++j){
                 for(int i = 0; i < in.length; ++i){
                     double d = (in[i] > 0 ? 1 : 0) * delta[j];
-                    newDelta[i] = d * oldweight[i][j];
+                    newDelta[i] += d * oldweight[i][j];
                     weight[i][j] += d * ep;
                     
                 }
-                bias += delta[j] * ep;
+                bias[j] += delta[j] * ep;
             }
             return newDelta;
         }
+    }
+    static double[][][] norm(double[][][] data){
+        DoubleSummaryStatistics summary = Arrays.stream(data)
+                .flatMap(Arrays::stream)
+                .flatMapToDouble(Arrays::stream)
+                .summaryStatistics();
+        
+        return Arrays.stream(data)
+                .map(ch -> Arrays.stream(ch)
+                        .map(row -> Arrays.stream(row)
+                                .map(d -> d - summary.getAverage())
+                                .toArray())
+                        .toArray(double[][]::new))
+                .toArray(double[][][]::new);
     }
     static double[][][] norm0(double[][][] data){
         return data;
@@ -368,7 +418,7 @@ public class ConvolutionalNet {
         InputFilter input = new InputFilter();
         layers.add(input);
         //一段目
-        layers.add(new ConvolutionLayer("norm1", 48, 3, 11, 4));
+        layers.add(new ConvolutionLayer("conv1", 48, 3, 11, 4));
         //一段目のプーリング
         layers.add(new MaxPoolingLayer("pool1", 3, 2));
         //一段目の正規化
@@ -382,12 +432,14 @@ public class ConvolutionalNet {
         layers.add(norm2);
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect(6144, 32);
+        FullyConnect fc1 = new FullyConnect("fc1", 6144, 32);
         //全結合2
-        FullyConnect fc2 = new FullyConnect(32, categories.size());
+        FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size());
         
         //Path p = dir.resolve("cat\\DSC00800.JPG");
-        List<Path> files = Files.walk(dir).filter(p -> !Files.isDirectory(p)).collect(Collectors.toList());
+        List<Path> files = Files.walk(dir)
+                .filter(p -> !Files.isDirectory(p))
+                .collect(Collectors.toList());
         Collections.shuffle(files);
         files.stream().forEach(p -> {
             String catName = p.getParent().getFileName().toString();
@@ -418,6 +470,12 @@ public class ConvolutionalNet {
             firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.result)));
             //全結合二段の表示
             lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
+            
+            firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.bias)));
+            secondBias.setIcon(new ImageIcon(createGraph(500, 128, ((ConvolutionLayer)layers.get(4)).bias)));
+            fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.bias)));
+            fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.bias)));
+            
         });
     }
     
@@ -447,10 +505,14 @@ public class ConvolutionalNet {
     static JLabel lastResult = new JLabel();
     static JLabel[] filtersLabel = Stream.generate(() -> new JLabel()).limit(48)
             .toArray(JLabel[]::new);
+    static JLabel firstBias = new JLabel();
+    static JLabel secondBias = new JLabel();
+    static JLabel fc1Bias = new JLabel();
+    static JLabel fc2Bias = new JLabel();
     
     static JFrame createFrame(){
         JFrame f = new JFrame("畳み込みニューラルネット");
-        f.setLayout(new GridLayout(2, 1));
+        f.setLayout(new GridLayout(3, 1));
         
         JPanel north = new JPanel();
         // 上段
@@ -464,13 +526,22 @@ public class ConvolutionalNet {
         northRight.add(firstFc);
         northRight.add(lastResult);
         
-        //下段
+        //中段
         JPanel middle = new JPanel();
         f.add(middle);
         middle.setLayout(new GridLayout(6, 8));
         for(int i = 0; i < filtersLabel.length; ++i){
             middle.add(filtersLabel[i]);
         }
+        //下段
+        JPanel bottom = new JPanel();
+        f.add(bottom);
+        bottom.setLayout(new GridLayout(4, 1));
+        bottom.add(firstBias);
+        bottom.add(secondBias);
+        bottom.add(fc1Bias);
+        bottom.add(fc2Bias);
+        
         f.setSize(540, 580);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         return f;
@@ -562,12 +633,19 @@ public class ConvolutionalNet {
     static Random r = new Random();
     static double[][] createRandomFilter(int size){
         double [][] result = new double[size][size];
+        double total = 0;
         for(int i = 0; i < size; ++i){
             for(int j = 0; j < size; ++j){
                 result[i][j] = r.nextDouble();
+                total += result[i][j];
             }
         }
-
+        //total = (total + 1) / (size * size);
+        for(int i = 0; i < size; ++i){
+            for(int j = 0; j < size; ++j){
+                //result[i][j] /= total;
+            }
+        }
         
         return result;
     }
@@ -621,17 +699,22 @@ public class ConvolutionalNet {
         g.dispose();
         return img;
     }    
-        
+
     static BufferedImage arrayToImage(double[][][] filteredData) {
+        return arrayToImage(filteredData, 1);
+    }
+
+    static BufferedImage arrayToImage(double[][][] filteredData, double rate) {
+        //rate = 1;
         BufferedImage filtered = new BufferedImage(
                 filteredData[0].length, filteredData[0][0].length,
                 BufferedImage.TYPE_INT_RGB);
         for(int x = 0; x < filteredData[0].length; ++x){
             for(int y = 0; y < filteredData[0][0].length; ++y){
                 filtered.setRGB(x, y,
-                        ((int)clip(filteredData[0][x][y] * 255) << 16) +
-                        ((int)clip(filteredData[1][x][y] * 255) << 8) +
-                         (int)clip(filteredData[2][x][y] * 255));
+                        ((int)clip(filteredData[0][x][y] * rate * 255) << 16) +
+                        ((int)clip(filteredData[1][x][y] * rate * 255) << 8) +
+                         (int)clip(filteredData[2][x][y] * rate * 255));
             }
         }
         return filtered;

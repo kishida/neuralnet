@@ -99,20 +99,22 @@ public class ConvolutionalNet {
         String name;
         double[][][] result;
         ImageNouralLayer preLayer;
+        ActivationFunction activation;
 
-        public ImageNouralLayer(String name) {
+        public ImageNouralLayer(String name, ActivationFunction activation) {
             this.name = name;
+            this.activation = activation;
         }
         
         double[][][] forward(){
             return forward(preLayer.result);
         }
         double[][][] backword(double[][][] delta){
-            return backword(preLayer.result, delta);
+            return backword(preLayer.result, delta, preLayer.activation);
         }
         
         abstract double[][][] forward(double[][][] in);
-        abstract double[][][] backword(double[][][] in, double[][][] delta);
+        abstract double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction activation);
 
         public String getName() {
             return name;
@@ -127,7 +129,7 @@ public class ConvolutionalNet {
     static class InputFilter extends ImageNouralLayer{
 
         public InputFilter() {
-            super("入力");
+            super("入力", new LinearFunction());
         }
 
         @Override
@@ -137,7 +139,7 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta) {
+        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction activation) {
             // do nothing
             return null;
         }
@@ -150,7 +152,7 @@ public class ConvolutionalNet {
         double[] bias;
         int stride;
         public ConvolutionLayer(String name, int filterCount, int channel, int size, int stride) {
-            super(name);
+            super(name, new RetifierdLinear());
             this.filter = Stream.generate(() -> Stream.generate(() -> createRandomFilter(size))
                             .limit(channel).toArray(double[][][]::new))
                         .limit(filterCount).toArray(double[][][][]::new);
@@ -199,7 +201,7 @@ public class ConvolutionalNet {
 
         /** 畳み込み層の学習 */
         @Override
-        double[][][] backword(double[][][] input, double[][][] delta){
+        double[][][] backword(double[][][] input, double[][][] delta, ActivationFunction activation){
             double[][][] newDelta = new double[input.length][input[0].length][input[0][0].length];
             double[][][][] oldfilter = Arrays.stream(filter)
                     .map(f -> Arrays.stream(f)
@@ -223,7 +225,7 @@ public class ConvolutionalNet {
                                     if(yy < 0 || yy >= input[0][0].length){
                                         continue;
                                     }
-                                    double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y];
+                                    double d = activation.diff(input[ch][xx][yy]) * delta[f][x][y];
                                     newDelta[ch][i][j] += d * oldfilter[f][ch][i][j];
                                     filter[f][ch][i][j] += d * ep;
                                 }
@@ -242,7 +244,7 @@ public class ConvolutionalNet {
         double average;
 
         public Normalize(String name) {
-            super(name);
+            super(name, new LinearFunction());
         }
         
         @Override
@@ -268,7 +270,7 @@ public class ConvolutionalNet {
             return result;
         }
         @Override
-        double[][][] backword(double[][][] in, double[][][] data){
+        double[][][] backword(double[][][] in, double[][][] data, ActivationFunction activation){
             double[][][] newDelta = new double[data.length][data[0].length][data[0][0].length];
             for(int i = 0; i < data.length; ++i){
                 for(int j = 0; j < data[i].length; ++j){
@@ -287,7 +289,7 @@ public class ConvolutionalNet {
         int stride;
 
         public MaxPoolingLayer(String name, int size, int stride) {
-            super(name);
+            super(name, new LinearFunction());
             this.size = size;
             this.stride = stride;
         }
@@ -322,7 +324,7 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta){
+        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction activation){
             double[][][] newDelta = new double[in.length][in[0].length][in[0][0].length];
             IntStream.range(0, in.length).parallel().forEach(ch -> {
                 for(int x = 0; x < in[0].length / stride; ++x){
@@ -363,7 +365,7 @@ public class ConvolutionalNet {
         int size;
         double threshold;
         public NormalizeLayer(String name, int size, double threshold) {
-            super(name);
+            super(name, new LinearFunction());
             this.size = size;
             this.threshold = threshold;
         }
@@ -417,7 +419,7 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta) {
+        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction activation) {
             return IntStream.range(0, delta.length)
                     .mapToObj(ch -> IntStream.range(0, delta[ch].length)
                         .mapToObj(x -> IntStream.range(0, delta[ch][x].length)
@@ -455,7 +457,7 @@ public class ConvolutionalNet {
             
             return result;
         }
-        public double[] backward(double[] in, double[] delta){
+        public double[] backward(double[] in, double[] delta, ActivationFunction activation){
             double[][] oldweight = Arrays.stream(weight)
                     .map(row -> Arrays.copyOf(row, row.length))
                     .toArray(double[][]::new);
@@ -463,7 +465,7 @@ public class ConvolutionalNet {
             
             for(int j = 0; j < out; ++j){
                 for(int i = 0; i < in.length; ++i){
-                    double d = (in[i] > 0 ? 1 : 0) * delta[j];
+                    double d = activation.diff(in[i]) * delta[j];
                     newDelta[i] += d * oldweight[i][j];
                     weight[i][j] += d * ep;
                     
@@ -694,9 +696,9 @@ public class ConvolutionalNet {
         double[] delta = IntStream.range(0, output.length)
                 .mapToDouble(idx -> -(correctData[idx] - output[idx]))
                 .toArray();
-        double[] deltaFc2 = fc2.backward(re, delta);
+        double[] deltaFc2 = fc2.backward(re, delta, norm2.activation);
         //全結合一段の逆伝播
-        double[] deltaFc1 = fc1.backward(flattenPooled2, deltaFc2);
+        double[] deltaFc1 = fc1.backward(flattenPooled2, deltaFc2, new RetifierdLinear());
         
         double[][][] deltaFc1Dim3 = divide3dim(deltaFc1, norm2.result[0].length, norm2.result[0][0].length);
         //プーリングの逆伝播

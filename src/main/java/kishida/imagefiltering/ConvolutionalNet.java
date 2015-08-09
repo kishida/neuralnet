@@ -28,13 +28,14 @@ import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
 
 /**
  *
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.0000000001;
+    static final double ep = 0.00000000001;
 
     static class Img{
 
@@ -466,6 +467,15 @@ public class ConvolutionalNet {
                 filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter[i]), 44, 44, false, false)));
             }
             //フィルタ後の表示
+            for(int i = 0; i < conv1.result.length; ++i){
+                filteredLabel[i].setIcon(new ImageIcon(arrayToImage(conv1.result[i])));
+            }
+            for(int i = 0; i < layers.get(2).result.length; ++i){
+                pooledLabel[i].setIcon(new ImageIcon(arrayToImage(layers.get(2).result[i])));
+            }
+            for(int i = 0; i < layers.get(3).result.length; ++i){
+                normedLabel[i].setIcon(new ImageIcon(arrayToImage(layers.get(3).result[i])));
+            }
             //全結合一段の表示
             firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.result)));
             //全結合二段の表示
@@ -509,6 +519,12 @@ public class ConvolutionalNet {
     static JLabel secondBias = new JLabel();
     static JLabel fc1Bias = new JLabel();
     static JLabel fc2Bias = new JLabel();
+    static JLabel[] filteredLabel = Stream.generate(() -> new JLabel()).limit(48)
+            .toArray(JLabel[]::new);
+    static JLabel[] pooledLabel = Stream.generate(() -> new JLabel()).limit(48)
+            .toArray(JLabel[]::new);
+    static JLabel[] normedLabel = Stream.generate(() -> new JLabel()).limit(48)
+            .toArray(JLabel[]::new);
     
     static JFrame createFrame(){
         JFrame f = new JFrame("畳み込みニューラルネット");
@@ -527,12 +543,25 @@ public class ConvolutionalNet {
         northRight.add(lastResult);
         
         //中段
+        JTabbedPane tab = new JTabbedPane();
+        f.add(tab);
         JPanel middle = new JPanel();
-        f.add(middle);
+        tab.add("filter", middle);
         middle.setLayout(new GridLayout(6, 8));
-        for(int i = 0; i < filtersLabel.length; ++i){
-            middle.add(filtersLabel[i]);
-        }
+        Arrays.stream(filtersLabel).forEach(middle::add);
+        JPanel filtered = new JPanel();
+        tab.add("filtered", filtered);
+        filtered.setLayout(new GridLayout(6, 8));
+        Arrays.stream(filteredLabel).forEach(filtered::add);
+        JPanel pooled = new JPanel();
+        tab.add("pooled", pooled);
+        pooled.setLayout(new GridLayout(6, 8));
+        Arrays.stream(pooledLabel).forEach(pooled::add);
+        JPanel normed = new JPanel();
+        tab.add("normed", normed);
+        normed.setLayout(new GridLayout(6, 8));
+        Arrays.stream(normedLabel).forEach(normed::add);
+        
         //下段
         JPanel bottom = new JPanel();
         f.add(bottom);
@@ -718,7 +747,20 @@ public class ConvolutionalNet {
             }
         }
         return filtered;
-    }        
+    }
+    static BufferedImage arrayToImage(double[][] filteredData){
+        DoubleSummaryStatistics summary = Arrays.stream(filteredData)
+                .flatMapToDouble(Arrays::stream)
+                .summaryStatistics();
+        double[][] normed = Arrays.stream(filteredData)
+                .map(row -> Arrays.stream(row)
+                        .map(d -> (d - summary.getMin()) 
+                                / (summary.getMax() - summary.getMin()))
+                        .toArray())
+                .toArray(double[][]::new);
+        
+        return arrayToImage(new double[][][]{normed, normed, normed});
+    }
     /** 画像から配列へ変換 */
     private static double[][][] imageToArray(BufferedImage img) {
         int width = img.getWidth();

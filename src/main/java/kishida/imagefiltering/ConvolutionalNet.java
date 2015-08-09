@@ -357,6 +357,78 @@ public class ConvolutionalNet {
         }
     }
     
+    static class NormalizeLayer extends ImageNouralLayer{
+        double[][][] averages;
+        double[][][] rates;
+        int size;
+        double threshold;
+        public NormalizeLayer(String name, int size, double threshold) {
+            super(name);
+            this.size = size;
+            this.threshold = threshold;
+        }
+
+        
+        
+        @Override
+        double[][][] forward(double[][][] in) {
+            averages = new double[in.length][in[0].length][in[0][0].length];
+            rates = new double[in.length][in[0].length][in[0][0].length];
+            result = new double[in.length][in[0].length][in[0][0].length];
+            
+            IntStream.range(0, in.length).parallel().forEach(ch -> {
+                for(int lx = 0; lx < in[ch].length; ++lx){
+                    int x = lx;
+                    for(int ly = 0; ly < in[ch][x].length; ++ly){
+                        int y = ly;
+                        //平均
+                        DoubleSummaryStatistics summary = 
+                                IntStream.range(0, size)
+                                .map(i -> x + i - size / 2)
+                                .filter(xx -> xx >= 0 && xx < in[ch].length)
+                                .mapToObj(xx -> 
+                                        IntStream.range(0, size)
+                                        .map(j -> y + j - size / 2)
+                                        .filter(yy -> yy >= 0 && yy < in[ch][x].length)
+                                        .mapToDouble(yy -> in[ch][xx][yy]))
+                                .flatMapToDouble(s -> s).summaryStatistics();
+                        //分散
+                        double variance = 
+                                IntStream.range(0, size)
+                                .map(i -> x + i - size / 2)
+                                .filter(xx -> xx >= 0 && xx < in[ch].length)
+                                .mapToObj(xx -> 
+                                        IntStream.range(0, size)
+                                        .map(j -> y + j - size / 2)
+                                        .filter(yy -> yy >= 0 && yy < in[ch][x].length)
+                                        .mapToDouble(yy -> 
+                                                (in[ch][xx][yy] - summary.getAverage()) * 
+                                                (in[ch][xx][yy] - summary.getAverage())))
+                                .flatMapToDouble(s -> s).sum();
+                        double std = Math.max(threshold, Math.sqrt(variance));
+                        result[ch][x][y] = (in[ch][x][y] - summary.getAverage()) / std;
+                        averages[ch][x][y] = summary.getAverage();
+                        rates[ch][x][y] = std;
+                    }
+                }
+            });
+            
+            return result;
+        }
+
+        @Override
+        double[][][] backword(double[][][] in, double[][][] delta) {
+            return IntStream.range(0, delta.length)
+                    .mapToObj(ch -> IntStream.range(0, delta[ch].length)
+                        .mapToObj(x -> IntStream.range(0, delta[ch][x].length)
+                            .mapToDouble(y -> delta[ch][x][y] * rates[ch][x][y] + averages[ch][x][y])
+                                .toArray())
+                        .toArray(double[][]::new))
+                    .toArray(double[][][]::new);
+        }
+        
+    }
+    
     static class FullyConnect{
         double[][] weight;
         double[] bias;
@@ -435,13 +507,13 @@ public class ConvolutionalNet {
         //一段目のプーリング
         layers.add(new MaxPoolingLayer("pool1", 3, 2));
         //一段目の正規化
-        layers.add(new Normalize("norm1"));
+        layers.add(new NormalizeLayer("norm1", 5, .1));
         //二段目
         layers.add(new ConvolutionLayer("conv2", 96, 48, 5, 2));
         //二段目のプーリング
         layers.add(new MaxPoolingLayer("pool2", 3, 2));
         
-        Normalize norm2 = new Normalize("norm2");
+        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1);
         layers.add(norm2);
         
         //全結合1

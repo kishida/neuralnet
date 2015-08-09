@@ -53,7 +53,19 @@ public class ConvolutionalNet {
         /** 微分 */
         double diff(double value);
     }
-    
+    static class LinearFunction implements ActivationFunction{
+
+        @Override
+        public double apply(double value) {
+            return value;
+        }
+
+        @Override
+        public double diff(double value) {
+            return 1;
+        }
+        
+    }
     /** 正規化線形関数 */
     static class RetifierdLinear implements ActivationFunction{
 

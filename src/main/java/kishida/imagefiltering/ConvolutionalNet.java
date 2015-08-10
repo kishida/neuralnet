@@ -242,7 +242,7 @@ public class ConvolutionalNet {
                         bias[f] += localEp * delta[f][x][y];
                     }
                 }
-            };
+            }
             return newDelta;
         }
     }
@@ -578,7 +578,7 @@ public class ConvolutionalNet {
             }
             historyData.add(rateData.stream().mapToDouble(d -> d).sum() 
                     / rateData.size());
-            Image lineGraph = createLineGraph(500, 250, 
+            Image lineGraph = createLineGraph(500, 200, 
                     historyData.stream().mapToDouble(d -> d).toArray(), 1, 0);
             historyLabel.setIcon(new ImageIcon(lineGraph));
             //一段目のフィルタの表示
@@ -636,8 +636,8 @@ public class ConvolutionalNet {
         g.fillRect(0, 0, width, height);
         g.setColor(Color.BLACK);
         for(int i = 1; i < data.length; ++i){
-            g.drawLine((i - 1) * width / data.length, (int)((data[i - 1] - max) * height / (min - max))
-                    , i * width / data.length, (int)((data[i] - max) * height / (min - max)));
+            g.drawLine((i - 1) * width / data.length, (int)((data[i - 1] - max) * (height - 10) / (min - max) - 5)
+                    , i * width / data.length, (int)((data[i] - max) * (height - 10)/ (min - max)) - 5);
         }
         g.dispose();
         return result;
@@ -705,7 +705,7 @@ public class ConvolutionalNet {
         bottom.add(secondBias);
         bottom.add(fc1Bias);
         bottom.add(fc2Bias);
-        bottomTab.add(historyLabel);
+        bottomTab.add("history", historyLabel);
         
         f.setSize(540, 580);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -744,7 +744,7 @@ public class ConvolutionalNet {
         System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //全結合二段の逆伝播
         double[] delta = IntStream.range(0, output.length)
-                .mapToDouble(idx -> -(correctData[idx] - output[idx]))
+                .mapToDouble(idx -> correctData[idx] - output[idx])
                 .toArray();
         double[] deltaFc2 = fc2.backward(re, delta, norm2.activation);
         //全結合一段の逆伝播
@@ -908,6 +908,17 @@ public class ConvolutionalNet {
                 imageData[0][x][y] = (rgb >> 16 & 0xff) / 255.;
                 imageData[1][x][y] = (rgb >> 8 & 0xff) / 255.;
                 imageData[2][x][y] = (rgb & 0xff) / 255.;
+            }
+        }
+        DoubleSummaryStatistics summaryStatistics = Arrays.stream(imageData)
+                .flatMap(Arrays::stream)
+                .flatMapToDouble(Arrays::stream)
+                .summaryStatistics();
+        for(int ch = 0; ch < imageData.length; ++ch){
+            for(int x = 0; x < imageData[ch].length; ++x){
+                for(int y = 0; y < imageData[ch][x].length; ++y){
+                    //imageData[ch][x][y] -= summaryStatistics.getAverage();
+                }
             }
         }
         return imageData;

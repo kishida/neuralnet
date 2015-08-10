@@ -35,7 +35,7 @@ import javax.swing.JTabbedPane;
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.00000000001;
+    static final double ep = 0.0000001;
 
     static class Img{
 
@@ -210,6 +210,8 @@ public class ConvolutionalNet {
                             ).toArray(double[][][]::new))
                     .toArray(double[][][][]::new);
             
+            double localEp = ep / (delta[0].length * delta[0][0].length);
+            
             for(int lf = 0; lf < filter.length; ++lf) {
                 int f = lf;
                 IntStream.range(0, filter[f].length).parallel().forEach(ch -> {
@@ -227,7 +229,7 @@ public class ConvolutionalNet {
                                     }
                                     double d = act.diff(input[ch][xx][yy]) * delta[f][x][y];
                                     newDelta[ch][i][j] += d * oldfilter[f][ch][i][j];
-                                    filter[f][ch][i][j] += d * ep;
+                                    filter[f][ch][i][j] += d * localEp;
                                 }
                             }
                         }
@@ -236,7 +238,7 @@ public class ConvolutionalNet {
                 // chでの並列ができなくなるので抜き出しておく
                 for(int x = 0; x < input[0].length / stride; ++x){
                     for(int y = 0; y < input[0][0].length / stride; ++y){
-                        bias[f] += ep * delta[f][x][y];
+                        bias[f] += localEp * delta[f][x][y];
                     }
                 }
             };

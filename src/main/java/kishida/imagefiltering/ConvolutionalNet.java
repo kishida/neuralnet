@@ -40,12 +40,16 @@ public class ConvolutionalNet {
 
     static class Img{
 
-        public Img(Path filename, boolean inverse) {
+        public Img(Path filename, boolean inverse, int x, int y) {
             this.filename = filename;
             this.inverse = inverse;
+            this.x = x;
+            this.y = y;
         }
         Path filename;
         boolean inverse;
+        int x;
+        int y;
     }
     
     /** 活性化関数 */
@@ -538,7 +542,10 @@ public class ConvolutionalNet {
         //Path p = dir.resolve("cat\\DSC00800.JPG");
         List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))
-                .flatMap(p -> Stream.of(new Img(p, true), new Img(p, false)))
+                .flatMap(p -> IntStream.range(0, 3).mapToObj(i -> 
+                        IntStream.range(0, 3).mapToObj(j -> 
+                                Stream.of(new Img(p, true, i, j), new Img(p, false, i, j)))
+                                .flatMap(s -> s)).flatMap(s -> s))
                 .collect(Collectors.toList());
         Collections.shuffle(files);
         files.stream().forEach(img -> {
@@ -554,8 +561,9 @@ public class ConvolutionalNet {
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
             }
-            BufferedImage resized = resize(readImg, 256, 256, true, img.inverse);
-            double[][][] readData = norm0(imageToArray(resized));
+            BufferedImage resized = resize(readImg, 256 + 32, 256 + 32, true, img.inverse);
+            BufferedImage moved = move(resized, 256, 256, img.x * 16, img.y * 16);
+            double[][][] readData = norm0(imageToArray(moved));
 
 
             double[] output = forward(layers, fc1, fc2, readData, correctData);
@@ -839,6 +847,13 @@ public class ConvolutionalNet {
         return (int)c;
     }
 
+    private static BufferedImage move(BufferedImage imgRead, int width, int height, int ox, int oy){
+        BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics g = img.getGraphics();
+        g.drawImage(imgRead, -ox, -oy, null);
+        g.dispose();
+        return img;
+    }
     
     private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
         return resize(imgRead, width, height, true, false);

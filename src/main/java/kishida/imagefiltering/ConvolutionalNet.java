@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.DoubleSummaryStatistics;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 import java.util.function.DoubleToIntFunction;
@@ -499,6 +500,10 @@ public class ConvolutionalNet {
     static double[][][] norm0(double[][][] data){
         return data;
     }
+    
+    static List<Double> historyData = new ArrayList<>();
+    static LinkedList<Integer> rateData = new LinkedList<>();
+    
     public static void main(String[] args) throws IOException {
         JFrame f = createFrame();
         f.setVisible(true);
@@ -566,6 +571,16 @@ public class ConvolutionalNet {
                 }
             }
             org.setText(categories.get(maxIndex));
+            //正答率
+            rateData.add((int)correctData[maxIndex] );
+            while(rateData.size() > 20){
+                rateData.removeFirst();
+            }
+            historyData.add(rateData.stream().mapToDouble(d -> d).sum() 
+                    / rateData.size());
+            Image lineGraph = createLineGraph(500, 250, 
+                    historyData.stream().mapToDouble(d -> d).toArray(), 1, 0);
+            historyLabel.setIcon(new ImageIcon(lineGraph));
             //一段目のフィルタの表示
             ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
             for(int i = 0; i < conv1.filter.length; ++i){
@@ -604,17 +619,29 @@ public class ConvolutionalNet {
                 (d - summary.getMin()) / (summary.getMax() - summary.getMin()) * height);
         g.setColor(Color.BLACK);
         g.drawLine(0, f.applyAsInt(0), width, f.applyAsInt(0));
+        int bottom = f.applyAsInt(0);
         for(int i = 0; i < data.length; ++i){
             int left = i * width / data.length;
-            int bottom = f.applyAsInt(0);
             int right = (i + 1) * width / data.length;
             int top = f.applyAsInt(data[i]);
             g.fillRect(left, Math.min(top, bottom), right - left - 1, Math.abs(bottom - top));
         }
-        
+        g.dispose();
         return result;
     }
-    
+    static Image createLineGraph(int width, int height, double[] data, double max, double min){
+        BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = (Graphics2D) result.getGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+        g.setColor(Color.BLACK);
+        for(int i = 1; i < data.length; ++i){
+            g.drawLine((i - 1) * width / data.length, (int)((data[i - 1] - max) * height / (min - max))
+                    , i * width / data.length, (int)((data[i] - max) * height / (min - max)));
+        }
+        g.dispose();
+        return result;
+    }
     static JLabel org = new JLabel();
     static JLabel firstFc = new JLabel();
     static JLabel lastResult = new JLabel();
@@ -630,6 +657,7 @@ public class ConvolutionalNet {
             .toArray(JLabel[]::new);
     static JLabel[] normedLabel = Stream.generate(() -> new JLabel()).limit(48)
             .toArray(JLabel[]::new);
+    static JLabel historyLabel = new JLabel();
     
     static JFrame createFrame(){
         JFrame f = new JFrame("畳み込みニューラルネット");
@@ -648,7 +676,7 @@ public class ConvolutionalNet {
         northRight.add(lastResult);
         
         //中段
-        JTabbedPane tab = new JTabbedPane();
+        JTabbedPane tab = new JTabbedPane(JTabbedPane.RIGHT);
         f.add(tab);
         JPanel middle = new JPanel();
         tab.add("filter", middle);
@@ -668,13 +696,16 @@ public class ConvolutionalNet {
         Arrays.stream(normedLabel).forEach(normed::add);
         
         //下段
+        JTabbedPane bottomTab = new JTabbedPane(JTabbedPane.TOP);
+        f.add(bottomTab);
         JPanel bottom = new JPanel();
-        f.add(bottom);
+        bottomTab.add("bias", bottom);
         bottom.setLayout(new GridLayout(4, 1));
         bottom.add(firstBias);
         bottom.add(secondBias);
         bottom.add(fc1Bias);
         bottom.add(fc2Bias);
+        bottomTab.add(historyLabel);
         
         f.setSize(540, 580);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

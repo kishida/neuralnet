@@ -90,7 +90,8 @@ public class ConvolutionalNet {
 
         @Override
         public double diff(double value) {
-            return value * (1 - value);
+            double ap = apply(value);
+            return ap * (1 - ap);
         }
         
     }

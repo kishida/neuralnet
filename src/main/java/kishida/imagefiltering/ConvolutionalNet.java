@@ -210,10 +210,11 @@ public class ConvolutionalNet {
                             ).toArray(double[][][]::new))
                     .toArray(double[][][][]::new);
             
-            IntStream.range(0, filter.length).parallel().forEach(f -> {
-                for(int x = 0; x < input[0].length / stride; ++x){
-                    for(int y = 0; y < input[0][0].length / stride; ++y){
-                        for(int ch = 0; ch < filter[0].length; ++ch){
+            for(int lf = 0; lf < filter.length; ++lf) {
+                int f = lf;
+                IntStream.range(0, filter[f].length).parallel().forEach(ch -> {
+                    for(int x = 0; x < input[0].length / stride; ++x){
+                        for(int y = 0; y < input[0][0].length / stride; ++y){
                             for(int i = 0; i < filter[0][0].length; ++i){
                                 int xx = x * stride + i - filter[0][0].length / 2;
                                 if(xx < 0 || xx >= input[0].length){
@@ -230,10 +231,15 @@ public class ConvolutionalNet {
                                 }
                             }
                         }
+                    }
+                });
+                // chでの並列ができなくなるので抜き出しておく
+                for(int x = 0; x < input[0].length / stride; ++x){
+                    for(int y = 0; y < input[0][0].length / stride; ++y){
                         bias[f] += ep * delta[f][x][y];
                     }
                 }
-            });
+            };
             return newDelta;
         }
     }

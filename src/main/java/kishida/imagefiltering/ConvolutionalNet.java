@@ -36,7 +36,7 @@ import javax.swing.JTabbedPane;
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.001;
+    static final double ep = 0.0001;
 
     static class Img{
 
@@ -162,7 +162,7 @@ public class ConvolutionalNet {
             this.filter = Stream.generate(() -> Stream.generate(() -> createRandomFilter(size))
                             .limit(channel).toArray(double[][][]::new))
                         .limit(filterCount).toArray(double[][][][]::new);
-            this.bias = DoubleStream.generate(() -> r.nextDouble()).limit(filterCount).toArray();
+            this.bias = DoubleStream.generate(() -> .5).limit(filterCount).toArray();
             this.stride = stride;
         }
         /** 畳み込みフィルタを適用する */
@@ -455,7 +455,7 @@ public class ConvolutionalNet {
             weight = Stream.generate(() -> 
                     DoubleStream.generate(() -> r.nextDouble() * 2 - 1).limit(out).toArray()
             ).limit(in).toArray(double[][]::new);
-            bias = DoubleStream.generate(() -> r.nextDouble()).limit(out).toArray();
+            bias = DoubleStream.generate(() -> .5).limit(out).toArray();
         }
         
         public double[] forward(double[] in){
@@ -578,9 +578,14 @@ public class ConvolutionalNet {
                     maxIndex = i;
                 }
             }
-            org.setText(categories.get(maxIndex));
+            if(maxIndex < 0){
+                org.setText("no data");
+                rateData.add(0);
+            }else{
+                org.setText(categories.get(maxIndex));
+                rateData.add((int)correctData[maxIndex] );
+            }
             //正答率
-            rateData.add((int)correctData[maxIndex] );
             while(rateData.size() > 20){
                 rateData.removeFirst();
             }

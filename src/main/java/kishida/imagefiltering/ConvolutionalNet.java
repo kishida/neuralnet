@@ -211,9 +211,9 @@ public class ConvolutionalNet {
                     .toArray(double[][][][]::new);
             
             IntStream.range(0, filter.length).parallel().forEach(f -> {
-                for(int ch = 0; ch < filter[0].length; ++ch){
-                    for(int x = 0; x < input[0].length / stride; ++x){
-                        for(int y = 0; y < input[0][0].length / stride; ++y){
+                for(int x = 0; x < input[0].length / stride; ++x){
+                    for(int y = 0; y < input[0][0].length / stride; ++y){
+                        for(int ch = 0; ch < filter[0].length; ++ch){
                             for(int i = 0; i < filter[0][0].length; ++i){
                                 int xx = x * stride + i - filter[0][0].length / 2;
                                 if(xx < 0 || xx >= input[0].length){
@@ -229,8 +229,8 @@ public class ConvolutionalNet {
                                     filter[f][ch][i][j] += d * ep;
                                 }
                             }
-                            bias[f] += ep * delta[f][x][y];
                         }
+                        bias[f] += ep * delta[f][x][y];
                     }
                 }
             });

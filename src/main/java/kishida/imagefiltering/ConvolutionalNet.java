@@ -35,7 +35,7 @@ import javax.swing.JTabbedPane;
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.0000001;
+    static final double ep = 0.001;
 
     static class Img{
 
@@ -430,7 +430,7 @@ public class ConvolutionalNet {
             return IntStream.range(0, delta.length)
                     .mapToObj(ch -> IntStream.range(0, delta[ch].length)
                         .mapToObj(x -> IntStream.range(0, delta[ch][x].length)
-                            .mapToDouble(y -> delta[ch][x][y] * rates[ch][x][y] + averages[ch][x][y])
+                            .mapToDouble(y -> delta[ch][x][y])// * rates[ch][x][y] + averages[ch][x][y])
                                 .toArray())
                         .toArray(double[][]::new))
                     .toArray(double[][][]::new);
@@ -531,11 +531,13 @@ public class ConvolutionalNet {
         FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size());
         
         //Path p = dir.resolve("cat\\DSC00800.JPG");
-        List<Path> files = Files.walk(dir)
+        List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))
+                .flatMap(p -> Stream.of(new Img(p, true), new Img(p, false)))
                 .collect(Collectors.toList());
         Collections.shuffle(files);
-        files.stream().forEach(p -> {
+        files.stream().forEach(img -> {
+            Path p = img.filename;
             String catName = p.getParent().getFileName().toString();
             double[] correctData = categories.stream()
                     .mapToDouble(name -> name.equals(catName) ? 1 : 0)
@@ -547,13 +549,23 @@ public class ConvolutionalNet {
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
             }
-            BufferedImage resized = resize(readImg, 256, 256);
+            BufferedImage resized = resize(readImg, 256, 256, true, img.inverse);
             double[][][] readData = norm0(imageToArray(resized));
 
-            //元画像の表示
-            org.setIcon(new ImageIcon(resized));
 
             double[] output = forward(layers, fc1, fc2, readData, correctData);
+            //元画像の表示
+            org.setIcon(new ImageIcon(resized));
+            //判定結果
+            double max = Double.NEGATIVE_INFINITY;
+            int maxIndex = -1;
+            for(int i = 0; i < output.length; ++i) {
+                if (output[i] > max){
+                    max = output[i];
+                    maxIndex = i;
+                }
+            }
+            org.setText(categories.get(maxIndex));
             //一段目のフィルタの表示
             ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
             for(int i = 0; i < conv1.filter.length; ++i){

@@ -159,7 +159,7 @@ public class ConvolutionalNet {
         int stride;
         public ConvolutionLayer(String name, int filterCount, int channel, int size, int stride) {
             super(name, new RetifierdLinear());
-            this.filter = Stream.generate(() -> Stream.generate(() -> createRandomFilter(size))
+            this.filter = Stream.generate(() -> Stream.generate(() -> createRandomFilter(size, channel))
                             .limit(channel).toArray(double[][][]::new))
                         .limit(filterCount).toArray(double[][][][]::new);
             this.bias = DoubleStream.generate(() -> .5).limit(filterCount).toArray();
@@ -420,9 +420,9 @@ public class ConvolutionalNet {
                                                 (in[ch][xx][yy] - summary.getAverage())))
                                 .flatMapToDouble(s -> s).sum();
                         double std = Math.max(threshold, Math.sqrt(variance));
-                        result[ch][x][y] = (in[ch][x][y] - summary.getAverage()) / std;
+                        result[ch][x][y] = (in[ch][x][y] - summary.getAverage()) / std / 2 + 0.5;
                         averages[ch][x][y] = summary.getAverage();
-                        rates[ch][x][y] = std;
+                        rates[ch][x][y] = std * 2;
                     }
                 }
             });
@@ -435,7 +435,7 @@ public class ConvolutionalNet {
             return IntStream.range(0, delta.length)
                     .mapToObj(ch -> IntStream.range(0, delta[ch].length)
                         .mapToObj(x -> IntStream.range(0, delta[ch][x].length)
-                            .mapToDouble(y -> delta[ch][x][y])// * rates[ch][x][y] + averages[ch][x][y])
+                            .mapToDouble(y -> (delta[ch][x][y] - .5) * rates[ch][x][y] + averages[ch][x][y])
                                 .toArray())
                         .toArray(double[][]::new))
                     .toArray(double[][][]::new);
@@ -453,7 +453,7 @@ public class ConvolutionalNet {
             this.name = name;
             this.out = out;
             weight = Stream.generate(() -> 
-                    DoubleStream.generate(() -> r.nextDouble() * 2 - 1).limit(out).toArray()
+                    DoubleStream.generate(() -> r.nextDouble() / in).limit(out).toArray()
             ).limit(in).toArray(double[][]::new);
             bias = DoubleStream.generate(() -> .5).limit(out).toArray();
         }
@@ -548,6 +548,7 @@ public class ConvolutionalNet {
                                 .flatMap(s -> s)).flatMap(s -> s))
                 .collect(Collectors.toList());
         Collections.shuffle(files);
+        long start = System.currentTimeMillis();
         files.stream().forEach(img -> {
             Path p = img.filename;
             String catName = p.getParent().getFileName().toString();
@@ -620,6 +621,9 @@ public class ConvolutionalNet {
             fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.bias)));
             
         });
+        long end = System.currentTimeMillis();
+        System.out.println(end - start);
+        System.out.printf("%.2fm%n", (end - start) / 1000. / 60);
     }
     
     static Image createGraph(int width, int height, double[] data){
@@ -809,12 +813,12 @@ public class ConvolutionalNet {
     }
     
     static Random r = new Random();
-    static double[][] createRandomFilter(int size){
+    static double[][] createRandomFilter(int size, int channel){
         double [][] result = new double[size][size];
         double total = 0;
         for(int i = 0; i < size; ++i){
             for(int j = 0; j < size; ++j){
-                result[i][j] = r.nextDouble();
+                result[i][j] = r.nextDouble() / size / size / channel;
                 total += result[i][j];
             }
         }
@@ -890,6 +894,17 @@ public class ConvolutionalNet {
     }
 
     static BufferedImage arrayToImage(double[][][] filteredData, double rate) {
+        DoubleSummaryStatistics summary = Arrays.stream(filteredData)
+                .flatMap(Arrays::stream)
+                .flatMapToDouble(Arrays::stream)
+                .summaryStatistics();
+        double[][][] normed = Arrays.stream(filteredData)
+                .map(ch -> Arrays.stream(ch)
+                .map(row -> Arrays.stream(row)
+                        .map(d -> (d - summary.getMin()) 
+                                / (summary.getMax() - summary.getMin()))
+                        .toArray())
+                .toArray(double[][]::new)).toArray(double[][][]::new);
         //rate = 1;
         BufferedImage filtered = new BufferedImage(
                 filteredData[0].length, filteredData[0][0].length,
@@ -897,25 +912,16 @@ public class ConvolutionalNet {
         for(int x = 0; x < filteredData[0].length; ++x){
             for(int y = 0; y < filteredData[0][0].length; ++y){
                 filtered.setRGB(x, y,
-                        ((int)clip(filteredData[0][x][y] * rate * 255) << 16) +
-                        ((int)clip(filteredData[1][x][y] * rate * 255) << 8) +
-                         (int)clip(filteredData[2][x][y] * rate * 255));
+                        ((int)clip(normed[0][x][y] * rate * 255) << 16) +
+                        ((int)clip(normed[1][x][y] * rate * 255) << 8) +
+                         (int)clip(normed[2][x][y] * rate * 255));
             }
         }
         return filtered;
     }
     static BufferedImage arrayToImage(double[][] filteredData){
-        DoubleSummaryStatistics summary = Arrays.stream(filteredData)
-                .flatMapToDouble(Arrays::stream)
-                .summaryStatistics();
-        double[][] normed = Arrays.stream(filteredData)
-                .map(row -> Arrays.stream(row)
-                        .map(d -> (d - summary.getMin()) 
-                                / (summary.getMax() - summary.getMin()))
-                        .toArray())
-                .toArray(double[][]::new);
         
-        return arrayToImage(new double[][][]{normed, normed, normed});
+        return arrayToImage(new double[][][]{filteredData, filteredData, filteredData});
     }
     /** 画像から配列へ変換 */
     private static double[][][] imageToArray(BufferedImage img) {

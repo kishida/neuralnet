@@ -36,7 +36,7 @@ import javax.swing.JTabbedPane;
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.0001;
+    static final double ep = 0.00001;
 
     static class Img{
 
@@ -207,7 +207,7 @@ public class ConvolutionalNet {
         @Override
         double[][][] backword(double[][][] input, double[][][] delta, ActivationFunction act){
             double[][][] newDelta = new double[input.length][input[0].length][input[0][0].length];
-            double[][][][] oldfilter = Arrays.stream(filter)
+            double[][][][] oldfilter = Arrays.stream(filter).parallel()
                     .map(f -> Arrays.stream(f)
                             .map(ch -> Arrays.stream(ch)
                                     .map(row -> Arrays.copyOf(row, row.length))
@@ -216,12 +216,11 @@ public class ConvolutionalNet {
                     .toArray(double[][][][]::new);
             
             double localEp = ep / (delta[0].length * delta[0][0].length);
-            
-            for(int lf = 0; lf < filter.length; ++lf) {
-                int f = lf;
-                IntStream.range(0, filter[f].length).parallel().forEach(ch -> {
-                    for(int x = 0; x < input[0].length / stride; ++x){
-                        for(int y = 0; y < input[0][0].length / stride; ++y){
+            double[][][][] tempDelta = new double[filter.length][input.length][input[0].length][input[0][0].length];
+            IntStream.range(0, filter.length).parallel().forEach(f -> {
+                for(int x = 0; x < input[0].length / stride; ++x){
+                    for(int y = 0; y < input[0][0].length / stride; ++y){
+                        for(int ch = 0; ch < filter[f].length; ++ch){
                             for(int i = 0; i < filter[0][0].length; ++i){
                                 int xx = x * stride + i - filter[0][0].length / 2;
                                 if(xx < 0 || xx >= input[0].length){
@@ -233,20 +232,24 @@ public class ConvolutionalNet {
                                         continue;
                                     }
                                     double d = act.diff(input[ch][xx][yy]) * delta[f][x][y];
-                                    newDelta[ch][i][j] += d * oldfilter[f][ch][i][j];
+                                    tempDelta[f][ch][x][y] += d * oldfilter[f][ch][i][j];
                                     filter[f][ch][i][j] += d * localEp;
                                 }
                             }
                         }
-                    }
-                });
-                // chでの並列ができなくなるので抜き出しておく
-                for(int x = 0; x < input[0].length / stride; ++x){
-                    for(int y = 0; y < input[0][0].length / stride; ++y){
                         bias[f] += localEp * delta[f][x][y];
                     }
                 }
-            }
+            });
+            IntStream.range(0, filter[0].length).parallel().forEach(ch -> {
+                for(int f = 0; f < filter.length; ++f){
+                    for(int x = 0; x < input[0].length / stride; ++x){
+                        for(int y = 0; y < input[0][0].length / stride; ++y){
+                            newDelta[ch][x][y] += tempDelta[f][ch][x][y];
+                        }
+                    }
+                }
+            });
             return newDelta;
         }
     }
@@ -432,7 +435,7 @@ public class ConvolutionalNet {
 
         @Override
         double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction act) {
-            return IntStream.range(0, delta.length)
+            return IntStream.range(0, delta.length).parallel()
                     .mapToObj(ch -> IntStream.range(0, delta[ch].length)
                         .mapToObj(x -> IntStream.range(0, delta[ch][x].length)
                             .mapToDouble(y -> (delta[ch][x][y] - .5) * rates[ch][x][y] + averages[ch][x][y])
@@ -460,30 +463,32 @@ public class ConvolutionalNet {
         
         public double[] forward(double[] in){
             result = new double[out];
-            for(int j = 0; j < out; ++j){
+            IntStream.range(0, out).parallel().forEach(j -> {
                 for(int i = 0; i < in.length; ++i){
                     result[j] += in[i] * weight[i][j];
                 }
                 result[j] += bias[j];
-            }
+            });
             
             return result;
         }
         public double[] backward(double[] in, double[] delta, ActivationFunction act){
-            double[][] oldweight = Arrays.stream(weight)
+            double[][] oldweight = Arrays.stream(weight).parallel()
                     .map(row -> Arrays.copyOf(row, row.length))
                     .toArray(double[][]::new);
             double[] newDelta = new double[in.length];
             
-            for(int j = 0; j < out; ++j){
-                for(int i = 0; i < in.length; ++i){
+            IntStream.range(0, in.length).parallel().forEach(i -> {
+                for(int j = 0; j < out; ++j){
                     double d = act.diff(in[i]) * delta[j];
                     newDelta[i] += d * oldweight[i][j];
                     weight[i][j] += d * ep;
                     
                 }
+            });
+            IntStream.range(0, out).parallel().forEach(j -> {
                 bias[j] += delta[j] * ep;
-            }
+            });
             return newDelta;
         }
     }
@@ -570,6 +575,7 @@ public class ConvolutionalNet {
             double[] output = forward(layers, fc1, fc2, readData, correctData);
             //元画像の表示
             org.setIcon(new ImageIcon(resized));
+            
             //判定結果
             double max = Double.NEGATIVE_INFINITY;
             int maxIndex = -1;

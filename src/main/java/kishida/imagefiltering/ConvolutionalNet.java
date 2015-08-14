@@ -39,6 +39,7 @@ import javax.swing.JTabbedPane;
 public class ConvolutionalNet {
     static final double ep = 0.0001;
     static Random random = new Random();
+    static final boolean USE_GPU = false;
 
     static class Img{
 
@@ -182,7 +183,6 @@ public class ConvolutionalNet {
         }
         
     }
-    static final boolean USE_GPU = true;
     static class ConvolutionForwardKernel extends Kernel{
 
         public ConvolutionForwardKernel() {
@@ -192,28 +192,32 @@ public class ConvolutionalNet {
         @Override
         public void run() {
             int xy = getGlobalId();
-            int x = xy / outputHeight;
-            int y = xy % outputHeight;
-            for(int fi = 0; fi < outputChannels; ++fi){
-                for(int ch = 0; ch < inputChannels; ++ch){
-                    for(int i = 0; i < filterSize; ++i){
-                        int xx = x * stride + i - filterSize / 2;
-                        if(xx >= 0 && xx < inputWidth){
-                            for(int j = 0; j < filterSize; ++j){
-                                int yy = y * stride + j - filterSize / 2;
-                                if(yy >= 0 && yy < inputHeight){
-                                    result[fi * outputWidth * outputHeight + xy] += 
-                                            input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
-                                            filter[fi * inputChannels * filterSize * filterSize + 
-                                                ch * filterSize * filterSize + i * filterSize + j];
-                                }
+            proc(xy);
+        }
+        
+        private void proc(int fixy){
+            int fi = fixy / (outputHeight * outputWidth);
+            int x = (fixy % (outputHeight * outputWidth)) / outputHeight;
+            int y = fixy % outputHeight;
+            for(int ch = 0; ch < inputChannels; ++ch){
+                for(int i = 0; i < filterSize; ++i){
+                    int xx = x * stride + i - filterSize / 2;
+                    if(xx >= 0 && xx < inputWidth){
+                        for(int j = 0; j < filterSize; ++j){
+                            int yy = y * stride + j - filterSize / 2;
+                            if(yy >= 0 && yy < inputHeight){
+                                result[fixy] += 
+                                        input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
+                                        filter[fi * inputChannels * filterSize * filterSize + 
+                                            ch * filterSize * filterSize + i * filterSize + j];
                             }
                         }
                     }
                 }
-                result[fi * outputWidth * outputHeight + xy] += bias[fi];
             }
+            result[fixy] += bias[fi];
         }
+        
         double[] result;
         double[] input;
         int inputChannels;
@@ -228,7 +232,7 @@ public class ConvolutionalNet {
         double[] bias;
         public double[] forward(double[] input, int inputChannels, int inputWidth, int inputHeight, 
                 double[] filter, int outputChannels, int outputWidth, int outputHeight, int filterSize, int stride,
-                double[] bias, ActivationFunction activation){
+                double[] bias, ActivationFunction activation, boolean useGpu){
             this.input = input;
             this.inputChannels = inputChannels;
             this.inputWidth = inputWidth;
@@ -242,35 +246,15 @@ public class ConvolutionalNet {
             this.bias = bias;
             
             result = new double[outputChannels * outputWidth * outputHeight];
-            if(USE_GPU){
+            if(useGpu){
                 put(input);
                 put(filter);
-                execute( outputWidth * outputHeight);
+                execute( outputChannels * outputWidth * outputHeight);
                 get(result);
             }else{
-                for(int xy = 0; xy < outputWidth * outputHeight; ++xy){
-                    int x = xy / outputHeight;
-                    int y = xy % outputHeight;
-                    for(int fi = 0; fi < outputChannels; ++fi){
-                        for(int ch = 0; ch < inputChannels; ++ch){
-                            for(int i = 0; i < filterSize; ++i){
-                                int xx = x * stride + i - filterSize / 2;
-                                if(xx >= 0 && xx < inputWidth){
-                                    for(int j = 0; j < filterSize; ++j){
-                                        int yy = y * stride + j - filterSize / 2;
-                                        if(yy >= 0 && yy < inputHeight){
-                                            result[fi * outputWidth * outputHeight + xy] += 
-                                                    input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
-                                                    filter[fi * inputChannels * filterSize * filterSize + 
-                                                        ch * filterSize * filterSize + i * filterSize + j];
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        result[fi * outputWidth * outputHeight + xy] += bias[fi];
-                    }
-                }
+                IntStream.range(0, outputChannels * outputWidth * outputHeight).parallel().forEach(xy -> {
+                    proc(xy);
+                });
             }
             IntStream.range(0, result.length).parallel().forEach(fi ->{
                 result[fi] = activation.apply(result[fi]);
@@ -279,13 +263,114 @@ public class ConvolutionalNet {
         }
     }
     static ConvolutionForwardKernel convolutionForwardKernel = new ConvolutionForwardKernel();
+    static ConvolutionBackwordKernel convolutionBackwordKernel = new ConvolutionBackwordKernel();
+    static class ConvolutionBackwordKernel extends Kernel{
+
+        @Override
+        public void run() {
+            int fxy = getGlobalId();
+            proc(fxy);
+        }
+        private void proc(int fxy){
+            double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
+            int f = fxy / (outputWidth * outputHeight);
+            int x = (fxy % (outputWidth * outputHeight)) / outputHeight;
+            int y = fxy % outputHeight;
+            for(int ch = 0; ch < inputChannels; ++ch){
+                for(int i = 0; i < filterSize; ++i){
+                    int xx = x * stride + i - filterSize / 2;
+                    if(xx < 0 || xx >= inputWidth){
+                        continue;
+                    }
+                    for(int j = 0; j < filterSize; ++j){
+                        int yy = y * stride + j - filterSize / 2;
+                        if(yy < 0 || yy >= inputHeight){
+                            continue;
+                        }
+                        tempDelta[f *  inputChannels * inputWidth * inputHeight +
+                                ch * inputWidth * inputHeight + x * inputHeight + y] += 
+                                    d * oldfilter[f * inputChannels * filterSize * filterSize + 
+                                        ch * filterSize * filterSize + i * filterSize + j];
+                        filter[f * inputChannels * filterSize * filterSize + 
+                                        ch * filterSize * filterSize + i * filterSize + j] += d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                    }
+                }
+            }
+            bias[f] += localEp * d;
+            
+        }
+        double[] input;
+        double[] result;
+        int inputChannels;
+        int inputWidth;
+        int inputHeight;
+        double[] filter;
+        int outputChannels;
+        int outputWidth;
+        int outputHeight;
+        int filterSize;
+        int stride;
+        double[] bias;
+        double[] delta;
+        double[] oldfilter;
+        double localEp;
+        double[] tempDelta;
+        double[] backword(double[] delta, double[] result, double[] input, int inputChannels, int inputWidth, int inputHeight, 
+                double[] filter, int outputChannels, int outputWidth, int outputHeight, int filterSize, int stride,
+                double[] bias, ActivationFunction act, boolean useGpu){
+            this.delta = delta;
+            this.input = input;
+            this.inputChannels = inputChannels;
+            this.inputWidth = inputWidth;
+            this.inputHeight = inputHeight;
+            this.filter = filter;
+            this.outputChannels = outputChannels;
+            this.outputWidth = outputWidth;
+            this.outputHeight = outputHeight;
+            this.filterSize = filterSize;
+            this.stride = stride;
+            this.bias = bias;
+            this.result = result;
+            this.oldfilter = Arrays.copyOf(filter, filter.length);
+            this.tempDelta = new double[outputChannels * inputChannels * inputWidth * inputHeight];
+            this.localEp = ep / (outputWidth * outputHeight);
+            
+            if(useGpu){
+                put(bias);
+                put(filter);
+                put(delta);
+                put(oldfilter);
+                put(input);
+                put(result);
+                execute( outputChannels * outputWidth * outputHeight);
+                get(filter);
+                get(tempDelta);
+                get(bias);
+            }else{
+                IntStream.range(0, outputChannels * outputWidth * outputHeight).parallel().forEach(fxy -> {
+                    proc(fxy);
+                });
+            }
+            double[] newDelta = new double[input.length];
+            IntStream.range(0, inputChannels * inputWidth * inputHeight).parallel().forEach(chxy -> {
+                for(int f = 0; f < outputChannels; ++f){
+                    newDelta[chxy] += tempDelta[f * inputChannels * inputWidth * inputHeight + chxy];
+                }
+            });
+            return newDelta;
+        }
+        
+
+    }
+    
     /** 畳み込み層 */
     static class ConvolutionLayer extends ImageNeuralLayer{
         double[] filter;
         double[] bias;
         int stride;
         int filterSize;
-        public ConvolutionLayer(String name, int channel, int width, int height, int filterCount,  int size, int stride) {
+        boolean useGpu;
+        public ConvolutionLayer(String name, int channel, int width, int height, int filterCount,  int size, int stride, boolean useGpu) {
             super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
             this.filter = random.doubles(size * size * channel * filterCount)
                     .map(d -> (d * 2 - 0.5) / size / size / channel)
@@ -293,59 +378,24 @@ public class ConvolutionalNet {
             this.bias = DoubleStream.generate(() -> .1).limit(filterCount).toArray();
             this.stride = stride;
             this.filterSize = size;
+            this.useGpu = useGpu;
         }
         /** 畳み込みフィルタを適用する */
         @Override
         double[] forward(double[] img) {
             result = convolutionForwardKernel.forward(img, inputChannels, inputWidth, inputHeight, 
                 filter, outputChannels, outputWidth, outputHeight, filterSize, stride,
-                bias, activation);
+                bias, activation, useGpu);
             return result;
         }
 
         /** 畳み込み層の学習 */
         @Override
         double[] backword(double[] input, double[] delta, ActivationFunction act){
-            double[] newDelta = new double[input.length];
-            double[] oldfilter = Arrays.copyOf(filter, filter.length);
-            
-            double localEp = ep / (outputWidth * outputHeight);
-            double[] tempDelta = new double[outputChannels * inputChannels * inputWidth * inputHeight];
-            IntStream.range(0, outputChannels).parallel().forEach(f -> {
-                for(int x = 0; x < outputWidth; ++x){
-                    for(int y = 0; y < outputHeight; ++y){
-                        int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
-                        double d = act.diff(result[fxy]) * delta[fxy];
-                        for(int ch = 0; ch < inputChannels; ++ch){
-                            for(int i = 0; i < filterSize; ++i){
-                                int xx = x * stride + i - filterSize / 2;
-                                if(xx < 0 || xx >= inputWidth){
-                                    continue;
-                                }
-                                for(int j = 0; j < filterSize; ++j){
-                                    int yy = y * stride + j - filterSize / 2;
-                                    if(yy < 0 || yy >= inputHeight){
-                                        continue;
-                                    }
-                                    tempDelta[f *  inputChannels * inputWidth * inputHeight +
-                                            ch * inputWidth * inputHeight + x * inputHeight + y] += 
-                                                d * oldfilter[f * inputChannels * filterSize * filterSize + 
-                                                    ch * filterSize * filterSize + i * filterSize + j];
-                                    filter[f * inputChannels * filterSize * filterSize + 
-                                                    ch * filterSize * filterSize + i * filterSize + j] += d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
-                                }
-                            }
-                        }
-                        bias[f] += localEp * d;
-                    }
-                }
-            });
-            IntStream.range(0, inputChannels * inputWidth * inputHeight).parallel().forEach(chxy -> {
-                for(int f = 0; f < outputChannels; ++f){
-                    newDelta[chxy] += tempDelta[f * inputChannels * inputWidth * inputHeight + chxy];
-                }
-            });
-            return newDelta;
+            return convolutionBackwordKernel.backword(delta, result,
+                    input, inputChannels, inputWidth, inputHeight, 
+                    filter, outputChannels, outputWidth, outputHeight,
+                    filterSize, stride, bias, act, useGpu);
         }
     }
     
@@ -563,22 +613,26 @@ public class ConvolutionalNet {
         List<ImageNeuralLayer> layers = new ArrayList<>();
         InputFilter input = new InputFilter(256, 256);
         layers.add(input);
-        //一段目
-        layers.add(new ConvolutionLayer("conv1", 3, 256, 256, 48, 11, 4));
-        //一段目のプーリング
-        layers.add(new MaxPoolingLayer("pool1", 3, 2, 48, 256 / 4, 256 / 4));
-        //一段目の正規化
-        layers.add(new NormalizeLayer("norm1", 5, .1, 48, 256 / 8, 256 / 8));
-        //二段目
-        layers.add(new ConvolutionLayer("conv2", 48, 256 / 8, 256 / 8, 12, 5, 2));
-        //二段目のプーリング
-        layers.add(new MaxPoolingLayer("pool2", 3, 2, 12, 256 / 16, 256 / 16));
         
-        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, 12, 256 / 32, 256 / 32);
+        final int FILTER_1ST = 48;
+        final int FILTER_2ND = 96;
+        
+        //一段目
+        layers.add(new ConvolutionLayer("conv1", 3, 256, 256, FILTER_1ST, 11, 4, USE_GPU));
+        //一段目のプーリング
+        layers.add(new MaxPoolingLayer("pool1", 3, 2, FILTER_1ST, 256 / 4, 256 / 4));
+        //一段目の正規化
+        layers.add(new NormalizeLayer("norm1", 5, .1, FILTER_1ST, 256 / 8, 256 / 8));
+        //二段目
+        layers.add(new ConvolutionLayer("conv2", FILTER_1ST, 256 / 8, 256 / 8, FILTER_2ND, 5, 2, USE_GPU));
+        //二段目のプーリング
+        layers.add(new MaxPoolingLayer("pool2", 3, 2, FILTER_2ND, 256 / 16, 256 / 16));
+        
+        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, FILTER_2ND, 256 / 32, 256 / 32);
         layers.add(norm2);
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", 12 * 256 / 32 * 256 / 32, 32);
+        FullyConnect fc1 = new FullyConnect("fc1", FILTER_2ND * 256 / 32 * 256 / 32, 32);
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size());
         

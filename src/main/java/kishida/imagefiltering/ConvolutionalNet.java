@@ -287,8 +287,8 @@ public class ConvolutionalNet {
         int size;
         int stride;
 
-        public MaxPoolingLayer(String name, int size, int stride, int inputChannels, int inputWidth, int inputHeight) {
-            super(name, new LinearFunction(), inputChannels, inputWidth, inputHeight, inputChannels,
+        public MaxPoolingLayer(String name, int size, int stride, int channels, int inputWidth, int inputHeight) {
+            super(name, new LinearFunction(), channels, inputWidth, inputHeight, channels,
                     inputWidth / stride, inputHeight / stride);
             this.size = size;
             this.stride = stride;
@@ -364,12 +364,12 @@ public class ConvolutionalNet {
     }
     
     static class NormalizeLayer extends ImageNeuralLayer{
-        double[][][] averages;
-        double[][][] rates;
+        double[] averages;
+        double[] rates;
         int size;
         double threshold;
-        public NormalizeLayer(String name, int size, double threshold) {
-            super(name, new LinearFunction());
+        public NormalizeLayer(String name, int size, double threshold, int channels, int width, int height) {
+            super(name, new LinearFunction(), channels, width, height, channels, width, height);
             this.size = size;
             this.threshold = threshold;
         }
@@ -377,44 +377,47 @@ public class ConvolutionalNet {
         
         
         @Override
-        double[][][] forward(double[][][] in) {
-            averages = new double[in.length][in[0].length][in[0][0].length];
-            rates = new double[in.length][in[0].length][in[0][0].length];
-            result = new double[in.length][in[0].length][in[0][0].length];
+        double[] forward(double[] in) {
+            averages = new double[in.length];
+            rates = new double[in.length];
+            result = new double[in.length];
             
             IntStream.range(0, in.length).parallel().forEach(ch -> {
-                for(int lx = 0; lx < in[ch].length; ++lx){
+                for(int lx = 0; lx < inputWidth; ++lx){
                     int x = lx;
-                    for(int ly = 0; ly < in[ch][x].length; ++ly){
+                    for(int ly = 0; ly < inputHeight; ++ly){
                         int y = ly;
                         //平均
                         DoubleSummaryStatistics summary = 
                                 IntStream.range(0, size)
                                 .map(i -> x + i - size / 2)
-                                .filter(xx -> xx >= 0 && xx < in[ch].length)
+                                .filter(xx -> xx >= 0 && xx < inputWidth)
                                 .mapToObj(xx -> 
                                         IntStream.range(0, size)
                                         .map(j -> y + j - size / 2)
-                                        .filter(yy -> yy >= 0 && yy < in[ch][x].length)
-                                        .mapToDouble(yy -> in[ch][xx][yy]))
+                                        .filter(yy -> yy >= 0 && yy < inputHeight)
+                                        .mapToDouble(yy -> in[ch * inputWidth * inputHeight + xx * inputHeight + yy]))
                                 .flatMapToDouble(s -> s).summaryStatistics();
                         //分散
                         double variance = 
                                 IntStream.range(0, size)
                                 .map(i -> x + i - size / 2)
-                                .filter(xx -> xx >= 0 && xx < in[ch].length)
+                                .filter(xx -> xx >= 0 && xx < inputWidth)
                                 .mapToObj(xx -> 
                                         IntStream.range(0, size)
                                         .map(j -> y + j - size / 2)
-                                        .filter(yy -> yy >= 0 && yy < in[ch][x].length)
+                                        .filter(yy -> yy >= 0 && yy < inputHeight)
                                         .mapToDouble(yy -> 
-                                                (in[ch][xx][yy] - summary.getAverage()) * 
-                                                (in[ch][xx][yy] - summary.getAverage())))
+                                                (in[ch * inputWidth * inputHeight + xx * inputHeight + yy] 
+                                                        - summary.getAverage()) * 
+                                                (in[ch * inputWidth * inputHeight + xx * inputHeight + yy] 
+                                                        - summary.getAverage())))
                                 .flatMapToDouble(s -> s).sum() / summary.getCount();
                         double std = Math.max(threshold, Math.sqrt(variance));
-                        result[ch][x][y] = (in[ch][x][y] - summary.getAverage()) / std;
-                        averages[ch][x][y] = summary.getAverage();
-                        rates[ch][x][y] = std;
+                        int chxy = ch * outputWidth * outputHeight + x * outputHeight + y;
+                        result[chxy] = (in[chxy] - summary.getAverage()) / std;
+                        averages[chxy] = summary.getAverage();
+                        rates[chxy] = std;
                     }
                 }
             });
@@ -423,14 +426,10 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction act) {
+        double[] backword(double[] in, double[] delta, ActivationFunction act) {
             return IntStream.range(0, delta.length).parallel()
-                    .mapToObj(ch -> IntStream.range(0, delta[ch].length)
-                        .mapToObj(x -> IntStream.range(0, delta[ch][x].length)
-                            .mapToDouble(y -> delta[ch][x][y] * rates[ch][x][y] + averages[ch][x][y])
-                                .toArray())
-                        .toArray(double[][]::new))
-                    .toArray(double[][][]::new);
+                .mapToDouble(ch -> delta[ch] * rates[ch] + averages[ch])
+                .toArray();
         }
         
     }

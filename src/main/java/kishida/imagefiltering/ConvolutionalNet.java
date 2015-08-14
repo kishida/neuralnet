@@ -245,10 +245,10 @@ public class ConvolutionalNet {
             
             double localEp = ep / (outputWidth * outputHeight);
             double[] tempDelta = new double[outputChannels * inputChannels * inputWidth * inputHeight];
-            IntStream.range(0, filter.length).parallel().forEach(f -> {
+            IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for(int x = 0; x < outputWidth; ++x){
                     for(int y = 0; y < outputHeight; ++y){
-                        int fxy = f * outputWidth * outputHeight;
+                        int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
                         double d = act.diff(result[fxy]) * delta[fxy];
                         for(int ch = 0; ch < inputChannels; ++ch){
                             for(int i = 0; i < filterSize; ++i){
@@ -317,7 +317,7 @@ public class ConvolutionalNet {
                                 }
                             }
                         }
-                        result[ch * outputWidth * outputWidth * outputHeight + x * outputHeight + y] = max;
+                        result[ch * outputWidth * outputHeight + x * outputHeight + y] = max;
                     }
                 }
             });
@@ -382,7 +382,7 @@ public class ConvolutionalNet {
             rates = new double[in.length];
             result = new double[in.length];
             
-            IntStream.range(0, in.length).parallel().forEach(ch -> {
+            IntStream.range(0, inputChannels).parallel().forEach(ch -> {
                 for(int lx = 0; lx < inputWidth; ++lx){
                     int x = lx;
                     for(int ly = 0; ly < inputHeight; ++ly){
@@ -495,24 +495,24 @@ public class ConvolutionalNet {
                 .filter(n -> !n.startsWith("_"))
                 .collect(Collectors.toList());
         List<ImageNeuralLayer> layers = new ArrayList<>();
-        InputFilter input = new InputFilter();
+        InputFilter input = new InputFilter(256, 256);
         layers.add(input);
         //一段目
-        layers.add(new ConvolutionLayer("conv1", 48, 3, 11, 4));
+        layers.add(new ConvolutionLayer("conv1", 3, 256, 256, 48, 11, 4));
         //一段目のプーリング
-        layers.add(new MaxPoolingLayer("pool1", 3, 2));
+        layers.add(new MaxPoolingLayer("pool1", 3, 2, 48, 256 / 4, 256 / 4));
         //一段目の正規化
-        layers.add(new NormalizeLayer("norm1", 5, .1));
+        layers.add(new NormalizeLayer("norm1", 5, .1, 48, 256 / 8, 256 / 8));
         //二段目
-        layers.add(new ConvolutionLayer("conv2", 96, 48, 5, 2));
+        layers.add(new ConvolutionLayer("conv2", 48, 256 / 8, 256 / 8, 12, 5, 2));
         //二段目のプーリング
-        layers.add(new MaxPoolingLayer("pool2", 3, 2));
+        layers.add(new MaxPoolingLayer("pool2", 3, 2, 12, 256 / 16, 256 / 16));
         
-        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1);
+        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, 12, 256 / 32, 256 / 32);
         layers.add(norm2);
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", 6144, 32);
+        FullyConnect fc1 = new FullyConnect("fc1", 12 * 256 / 32 * 256 / 32, 32);
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size());
         
@@ -543,7 +543,7 @@ public class ConvolutionalNet {
             }
             BufferedImage resized = resize(readImg, 256 + 32, 256 + 32, true, img.inverse);
             BufferedImage moved = move(resized, 256, 256, img.x * 16, img.y * 16);
-            double[][][] readData = imageToArray(moved);
+            double[] readData = imageToArray(moved);
 
 
             double[] output = forward(layers, fc1, fc2, readData, correctData);
@@ -577,18 +577,18 @@ public class ConvolutionalNet {
             historyLabel.setIcon(new ImageIcon(lineGraph));
             //一段目のフィルタの表示
             ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
-            for(int i = 0; i < conv1.filter.length; ++i){
-                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter[i]), 44, 44, false, false)));
+            for(int i = 0; i < conv1.outputChannels; ++i){
+                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter, i, 11, 11), 44, 44, false, false)));
             }
             //フィルタ後の表示
-            for(int i = 0; i < conv1.result.length; ++i){
-                filteredLabel[i].setIcon(new ImageIcon(arrayToImage(conv1.result[i])));
+            for(int i = 0; i < conv1.outputChannels; ++i){
+                filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(conv1.result, i, conv1.outputWidth, conv1.outputHeight)));
             }
-            for(int i = 0; i < layers.get(2).result.length; ++i){
-                pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImage(layers.get(2).result[i]), 48, 48)));
+            for(int i = 0; i < layers.get(2).outputChannels; ++i){
+                pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(layers.get(2).result, i, layers.get(2).outputWidth, layers.get(2).outputHeight), 48, 48)));
             }
-            for(int i = 0; i < layers.get(3).result.length; ++i){
-                normedLabel[i].setIcon(new ImageIcon(resize(arrayToImage(layers.get(3).result[i]), 48, 48)));
+            for(int i = 0; i < layers.get(3).outputChannels; ++i){
+                normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(layers.get(3).result, i, layers.get(3).outputWidth, layers.get(3).outputHeight), 48, 48)));
             }
             //全結合一段の表示
             firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.result)));
@@ -819,64 +819,60 @@ public class ConvolutionalNet {
         return img;
     }    
 
-    static BufferedImage arrayToImage(double[][][] filteredData) {
-        return arrayToImage(filteredData, 1);
+    static BufferedImage arrayToImage(double[] filteredData, int idx, int width, int height) {
+        return arrayToImage(filteredData, idx, width, height, 1);
     }
 
-    static BufferedImage arrayToImage(double[][][] filteredData, double rate) {
-        DoubleSummaryStatistics summary = Arrays.stream(filteredData).parallel()
-                .flatMap(Arrays::stream)
-                .flatMapToDouble(Arrays::stream)
+    static BufferedImage arrayToImage(double[] filteredData, int idx, int width, int height, double rate) {
+        DoubleSummaryStatistics summary = Arrays.stream(filteredData,
+                idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
                 .summaryStatistics();
-        double[][][] normed = Arrays.stream(filteredData).parallel()
-                .map(ch -> Arrays.stream(ch)
-                .map(row -> Arrays.stream(row)
+        double[] normed = Arrays.stream(filteredData, idx * width * height, (idx + 3) * width * height).parallel()
                         .map(d -> (d - summary.getMin()) 
                                 / (summary.getMax() - summary.getMin()))
-                        .toArray())
-                .toArray(double[][]::new)).toArray(double[][][]::new);
+                        .toArray();
         //rate = 1;
         BufferedImage filtered = new BufferedImage(
-                filteredData[0].length, filteredData[0][0].length,
+                width, height,
                 BufferedImage.TYPE_INT_RGB);
-        for(int x = 0; x < filteredData[0].length; ++x){
-            for(int y = 0; y < filteredData[0][0].length; ++y){
+        for(int x = 0; x < width; ++x){
+            for(int y = 0; y < height; ++y){
                 filtered.setRGB(x, y,
-                        ((int)clip(normed[0][x][y] * rate * 255) << 16) +
-                        ((int)clip(normed[1][x][y] * rate * 255) << 8) +
-                         (int)clip(normed[2][x][y] * rate * 255));
+                        ((int)clip(normed[x * height + y] * rate * 255) << 16) +
+                        ((int)clip(normed[x * height + y + width * height] * rate * 255) << 8) +
+                         (int)clip(normed[x * height + y + 2 * width * height] * rate * 255));
             }
         }
         return filtered;
     }
-    static BufferedImage arrayToImage(double[][] filteredData){
-        
-        return arrayToImage(new double[][][]{filteredData, filteredData, filteredData});
+    static BufferedImage arrayToImageMono(double[] filteredData, int idx, int width, int height){
+        double[] colorData = new double[width * height * 3];
+        for(int i = 0; i < width * height; ++i){
+            colorData[i] = filteredData[idx * width * height + i];
+            colorData[i + width * height] = filteredData[idx * width * height + i];
+            colorData[i + width * height * 2] = filteredData[idx * width * height + i];
+        }
+        return arrayToImage(colorData, 0, width, height);
     }
     /** 画像から配列へ変換 */
-    private static double[][][] imageToArray(BufferedImage img) {
+    private static double[] imageToArray(BufferedImage img) {
         int width = img.getWidth();
         int height = img.getHeight();
-        double[][][] imageData = new double[3][width][height];
+        double[] imageData = new double[3 * width * height];
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
                 int rgb = img.getRGB(x, y);
-                imageData[0][x][y] = (rgb >> 16 & 0xff) / 255.;
-                imageData[1][x][y] = (rgb >> 8 & 0xff) / 255.;
-                imageData[2][x][y] = (rgb & 0xff) / 255.;
+                int pos = x * height + y;
+                imageData[pos] = (rgb >> 16 & 0xff) / 255.;
+                imageData[pos + width * height] = (rgb >> 8 & 0xff) / 255.;
+                imageData[pos + 2 * width * height] = (rgb & 0xff) / 255.;
             }
         }
         
         DoubleSummaryStatistics summaryStatistics = Arrays.stream(imageData)
-                .flatMap(Arrays::stream)
-                .flatMapToDouble(Arrays::stream)
                 .summaryStatistics();
         for(int ch = 0; ch < imageData.length; ++ch){
-            for(int x = 0; x < imageData[ch].length; ++x){
-                for(int y = 0; y < imageData[ch][x].length; ++y){
-                    imageData[ch][x][y] -= summaryStatistics.getAverage();
-                }
-            }
+            imageData[ch] -= summaryStatistics.getAverage();
         }
         return imageData;
     }    

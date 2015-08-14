@@ -95,8 +95,22 @@ public class ConvolutionalNet {
 
         @Override
         public double diff(double value) {
-            double ap = apply(value);
-            return ap * (1 - ap);
+            return value * (1 - value);
+        }
+        
+    }
+    
+    /** ソフトマックス */
+    static class SoftMaxFunction implements ActivationFunction{
+
+        @Override
+        public double apply(double value) {
+            return value;//結果をフラット化してから実装する
+        }
+
+        @Override
+        public double diff(double value) {
+            return value * (1 - value);
         }
         
     }
@@ -116,7 +130,7 @@ public class ConvolutionalNet {
             return forward(preLayer.result);
         }
         double[][][] backword(double[][][] delta){
-            return backword(preLayer.result, delta, preLayer.activation);
+            return backword(preLayer.result, delta, activation);
         }
         
         abstract double[][][] forward(double[][][] in);
@@ -162,7 +176,7 @@ public class ConvolutionalNet {
             this.filter = Stream.generate(() -> Stream.generate(() -> createRandomFilter(size, channel))
                             .limit(channel).toArray(double[][][]::new))
                         .limit(filterCount).toArray(double[][][][]::new);
-            this.bias = DoubleStream.generate(() -> .2).limit(filterCount).toArray();
+            this.bias = DoubleStream.generate(() -> .1).limit(filterCount).toArray();
             this.stride = stride;
         }
         /** 畳み込みフィルタを適用する */
@@ -220,6 +234,7 @@ public class ConvolutionalNet {
             IntStream.range(0, filter.length).parallel().forEach(f -> {
                 for(int x = 0; x < input[0].length / stride; ++x){
                     for(int y = 0; y < input[0][0].length / stride; ++y){
+                        double d = act.diff(result[f][x][y]) * delta[f][x][y];
                         for(int ch = 0; ch < filter[f].length; ++ch){
                             for(int i = 0; i < filter[0][0].length; ++i){
                                 int xx = x * stride + i - filter[0][0].length / 2;
@@ -231,13 +246,12 @@ public class ConvolutionalNet {
                                     if(yy < 0 || yy >= input[0][0].length){
                                         continue;
                                     }
-                                    double d = act.diff(input[ch][xx][yy]) * delta[f][x][y];
                                     tempDelta[f][ch][x][y] += d * oldfilter[f][ch][i][j];
-                                    filter[f][ch][i][j] += d * localEp;
+                                    filter[f][ch][i][j] += d * localEp * input[ch][xx][yy];
                                 }
                             }
                         }
-                        bias[f] += localEp * delta[f][x][y];
+                        bias[f] += localEp * d;
                     }
                 }
             });
@@ -253,51 +267,6 @@ public class ConvolutionalNet {
             return newDelta;
         }
     }
-    
-    static class Normalize extends ImageNouralLayer{
-        double range;
-        double average;
-
-        public Normalize(String name) {
-            super(name, new LinearFunction());
-        }
-        
-        @Override
-        double[][][] forward(double[][][] data){
-            result = new double[data.length][data[0].length][data[0][0].length];
-            for(int i = 0; i < data.length; ++i){
-                DoubleSummaryStatistics st = Arrays.stream(data[i])
-                        .flatMapToDouble(Arrays::stream)
-                        .summaryStatistics();
-                average = st.getAverage();
-                range = st.getMax() - average;
-                if(range == 0){
-                    // rangeが0になるようであれば、割らないようにする
-                    range = 1;
-                }
-                for(int j = 0; j < data[i].length; ++j){
-                    for(int k = 0; k < data[i][j].length; ++k){
-                        result[i][j][k] = (data[i][j][k] - average) / range;
-                    }
-                }
-
-            }
-            return result;
-        }
-        @Override
-        double[][][] backword(double[][][] in, double[][][] data, ActivationFunction act){
-            double[][][] newDelta = new double[data.length][data[0].length][data[0][0].length];
-            for(int i = 0; i < data.length; ++i){
-                for(int j = 0; j < data[i].length; ++j){
-                    for(int k = 0; k < data[i][j].length; ++k){
-                        newDelta[i][j][k] = data[i][j][k] * range + average;
-                    }
-                }
-            }
-            return newDelta;
-        }
-    }
-    
     
     static class MaxPoolingLayer extends ImageNouralLayer{
         int size;
@@ -364,7 +333,7 @@ public class ConvolutionalNet {
                                 }
                             }
                         }
-                        newDelta[ch][maxX][maxY] = act.diff(in[ch][maxX][maxY]) * delta[ch][x][y];
+                        newDelta[ch][maxX][maxY] += act.diff(result[ch][x][y]) * delta[ch][x][y];
                     }
                 }
             });
@@ -456,7 +425,7 @@ public class ConvolutionalNet {
             this.name = name;
             this.out = out;
             weight = Stream.generate(() -> 
-                    DoubleStream.generate(() -> r.nextDouble() / in).limit(out).toArray()
+                    DoubleStream.generate(() -> (r.nextDouble() * 1.5 - .5) / in).limit(out).toArray()
             ).limit(in).toArray(double[][]::new);
             bias = DoubleStream.generate(() -> .1).limit(out).toArray();
         }
@@ -480,14 +449,14 @@ public class ConvolutionalNet {
             
             IntStream.range(0, in.length).parallel().forEach(i -> {
                 for(int j = 0; j < out; ++j){
-                    double d = act.diff(in[i]) * delta[j];
+                    double d = act.diff(result[j]) * delta[j];
                     newDelta[i] += d * oldweight[i][j];
-                    weight[i][j] += d * ep;
+                    weight[i][j] += d * ep * in[i];
                     
                 }
             });
             IntStream.range(0, out).parallel().forEach(j -> {
-                bias[j] += delta[j] * ep;
+                bias[j] += act.diff(result[j]) * delta[j] * ep;
             });
             return newDelta;
         }
@@ -614,10 +583,10 @@ public class ConvolutionalNet {
                 filteredLabel[i].setIcon(new ImageIcon(arrayToImage(conv1.result[i])));
             }
             for(int i = 0; i < layers.get(2).result.length; ++i){
-                pooledLabel[i].setIcon(new ImageIcon(arrayToImage(layers.get(2).result[i])));
+                pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImage(layers.get(2).result[i]), 48, 48)));
             }
             for(int i = 0; i < layers.get(3).result.length; ++i){
-                normedLabel[i].setIcon(new ImageIcon(arrayToImage(layers.get(3).result[i])));
+                normedLabel[i].setIcon(new ImageIcon(resize(arrayToImage(layers.get(3).result[i]), 48, 48)));
             }
             //全結合一段の表示
             firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.result)));
@@ -767,13 +736,17 @@ public class ConvolutionalNet {
         System.out.println(Arrays.stream(fc2out).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //ソフトマックス
         double[] output = softMax(fc2out);
+        //結果を書き戻しておく
+        for(int i = 0; i < fc2.result.length; ++i){
+            fc2.result[i] = output[i];
+        }
         System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //全結合二段の逆伝播
         double[] delta = IntStream.range(0, output.length)
                 .mapToDouble(idx -> correctData[idx] - output[idx])
                 //.map(d -> -d)
                 .toArray();
-        double[] deltaFc2 = fc2.backward(fc1out, delta, norm2.activation);
+        double[] deltaFc2 = fc2.backward(fc1out, delta, new SoftMaxFunction());
         //全結合一段の逆伝播
         double[] deltaFc1 = fc1.backward(flattenPooled2, deltaFc2, new RetifierdLinear());
         
@@ -828,7 +801,7 @@ public class ConvolutionalNet {
         double total = 0;
         for(int i = 0; i < size; ++i){
             for(int j = 0; j < size; ++j){
-                result[i][j] = r.nextDouble() * 2 / size / size / channel;
+                result[i][j] = (r.nextDouble() * 2 - .5) / size / size / channel;
                 total += result[i][j];
             }
         }

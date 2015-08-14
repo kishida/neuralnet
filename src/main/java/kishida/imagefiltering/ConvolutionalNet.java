@@ -132,7 +132,6 @@ public class ConvolutionalNet {
                 int inputChannels, int inputWidth, int inputHeight, 
                 int outputChannels, int outputWidth, int outputHeight) {
             this.name = name;
-            this.preLayer = preLayer;
             this.activation = activation;
             this.inputChannels = inputChannels;
             this.inputWidth = inputWidth;
@@ -288,35 +287,37 @@ public class ConvolutionalNet {
         int size;
         int stride;
 
-        public MaxPoolingLayer(String name, int size, int stride) {
-            super(name, new LinearFunction());
+        public MaxPoolingLayer(String name, int size, int stride, int inputChannels, int inputWidth, int inputHeight) {
+            super(name, new LinearFunction(), inputChannels, inputWidth, inputHeight, inputChannels,
+                    inputWidth / stride, inputHeight / stride);
             this.size = size;
             this.stride = stride;
         }
         /** プーリング(max) */
         @Override
-        double[][][] forward(double[][][] data){
-            result = new double[data.length][data[0].length / stride][data[0][0].length / stride];
-            IntStream.range(0, data.length).parallel().forEach(ch -> {
-                for(int x = 0; x < data[0].length / stride; ++x){
-                    for(int y = 0; y < data[0][0].length / stride; ++y){
+        double[] forward(double[] data){
+            result = new double[outputChannels * outputWidth * outputHeight];
+            IntStream.range(0, inputChannels).parallel().forEach(ch -> {
+                for(int x = 0; x < outputWidth; ++x){
+                    for(int y = 0; y < outputHeight; ++y){
                         double max = Double.NEGATIVE_INFINITY;
                         for(int i = 0; i < size; ++i){
                             int xx = x * stride + i - size / 2;
-                            if(xx < 0 || xx >= data[0].length){
+                            if(xx < 0 || xx >= inputWidth){
                                 continue;
                             }
                             for(int j = 0; j < size; ++j){
                                 int yy = y * stride + j - size / 2;
-                                if(yy < 0 || yy >= data[0][0].length){
+                                if(yy < 0 || yy >= inputHeight){
                                     continue;
                                 }
-                                if(max < data[ch][xx][yy]){
-                                    max = data[ch][xx][yy];
+                                double d = data[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                                if(max < d){
+                                    max = d;
                                 }
                             }
                         }
-                        result[ch][x][y] = max;
+                        result[ch * outputWidth * outputWidth * outputHeight + x * outputHeight + y] = max;
                     }
                 }
             });
@@ -324,32 +325,35 @@ public class ConvolutionalNet {
         }
 
         @Override
-        double[][][] backword(double[][][] in, double[][][] delta, ActivationFunction act){
-            double[][][] newDelta = new double[in.length][in[0].length][in[0][0].length];
-            IntStream.range(0, in.length).parallel().forEach(ch -> {
-                for(int x = 0; x < in[0].length / stride; ++x){
-                    for(int y = 0; y < in[0][0].length / stride; ++y){
+        double[] backword(double[] in, double[] delta, ActivationFunction act){
+            double[] newDelta = new double[in.length];
+            IntStream.range(0, inputChannels).parallel().forEach(ch -> {
+                for(int x = 0; x < outputWidth; ++x){
+                    for(int y = 0; y < outputHeight; ++y){
                         double max = Double.NEGATIVE_INFINITY;
                         int maxX = 0;
                         int maxY = 0;
                         for(int i = 0; i < size; ++i){
                             int xx = x * stride + i - size / 2;
-                            if(xx < 0 || xx >= in[0].length){
+                            if(xx < 0 || xx >= inputWidth){
                                 continue;
                             }
                             for(int j = 0; j < size; ++j){
                                 int yy = y * stride + j - size / 2;
-                                if(yy < 0 || yy >= in[0][0].length){
+                                if(yy < 0 || yy >= inputHeight){
                                     continue;
                                 }
-                                if(max < in[ch][xx][yy]){
-                                    max = in[ch][xx][yy];
+                                double d = in[ch * inputWidth * inputHeight + xx * inputWidth + yy];
+                                if(max < d){
+                                    max = d;
                                     maxX = xx;
                                     maxY = yy;
                                 }
                             }
                         }
-                        newDelta[ch][maxX][maxY] += act.diff(result[ch][x][y]) * delta[ch][x][y];
+                        int chxy = ch * outputWidth * outputHeight + x * outputHeight + y;
+                        newDelta[ch * inputWidth * inputHeight + maxX * inputHeight + maxY] += 
+                                act.diff(result[chxy]) * delta[chxy];
                     }
                 }
             });

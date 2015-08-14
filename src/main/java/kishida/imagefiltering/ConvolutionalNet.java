@@ -1,5 +1,6 @@
 package kishida.imagefiltering;
 
+import com.amd.aparapi.Kernel;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -181,7 +182,103 @@ public class ConvolutionalNet {
         }
         
     }
-    
+    static final boolean USE_GPU = true;
+    static class ConvolutionForwardKernel extends Kernel{
+
+        public ConvolutionForwardKernel() {
+            setExplicit(true);
+        }
+        
+        @Override
+        public void run() {
+            int xy = getGlobalId();
+            int x = xy / outputHeight;
+            int y = xy % outputHeight;
+            for(int fi = 0; fi < outputChannels; ++fi){
+                for(int ch = 0; ch < inputChannels; ++ch){
+                    for(int i = 0; i < filterSize; ++i){
+                        int xx = x * stride + i - filterSize / 2;
+                        if(xx >= 0 && xx < inputWidth){
+                            for(int j = 0; j < filterSize; ++j){
+                                int yy = y * stride + j - filterSize / 2;
+                                if(yy >= 0 && yy < inputHeight){
+                                    result[fi * outputWidth * outputHeight + xy] += 
+                                            input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
+                                            filter[fi * inputChannels * filterSize * filterSize + 
+                                                ch * filterSize * filterSize + i * filterSize + j];
+                                }
+                            }
+                        }
+                    }
+                }
+                result[fi * outputWidth * outputHeight + xy] += bias[fi];
+            }
+        }
+        double[] result;
+        double[] input;
+        int inputChannels;
+        int inputWidth;
+        int inputHeight;
+        double[] filter;
+        int outputChannels;
+        int outputWidth;
+        int outputHeight;
+        int filterSize;
+        int stride;
+        double[] bias;
+        public double[] forward(double[] input, int inputChannels, int inputWidth, int inputHeight, 
+                double[] filter, int outputChannels, int outputWidth, int outputHeight, int filterSize, int stride,
+                double[] bias, ActivationFunction activation){
+            this.input = input;
+            this.inputChannels = inputChannels;
+            this.inputWidth = inputWidth;
+            this.inputHeight = inputHeight;
+            this.filter = filter;
+            this.outputChannels = outputChannels;
+            this.outputWidth = outputWidth;
+            this.outputHeight = outputHeight;
+            this.filterSize = filterSize;
+            this.stride = stride;
+            this.bias = bias;
+            
+            result = new double[outputChannels * outputWidth * outputHeight];
+            if(USE_GPU){
+                put(input);
+                put(filter);
+                execute( outputWidth * outputHeight);
+                get(result);
+            }else{
+                for(int xy = 0; xy < outputWidth * outputHeight; ++xy){
+                    int x = xy / outputHeight;
+                    int y = xy % outputHeight;
+                    for(int fi = 0; fi < outputChannels; ++fi){
+                        for(int ch = 0; ch < inputChannels; ++ch){
+                            for(int i = 0; i < filterSize; ++i){
+                                int xx = x * stride + i - filterSize / 2;
+                                if(xx >= 0 && xx < inputWidth){
+                                    for(int j = 0; j < filterSize; ++j){
+                                        int yy = y * stride + j - filterSize / 2;
+                                        if(yy >= 0 && yy < inputHeight){
+                                            result[fi * outputWidth * outputHeight + xy] += 
+                                                    input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
+                                                    filter[fi * inputChannels * filterSize * filterSize + 
+                                                        ch * filterSize * filterSize + i * filterSize + j];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        result[fi * outputWidth * outputHeight + xy] += bias[fi];
+                    }
+                }
+            }
+            IntStream.range(0, result.length).parallel().forEach(fi ->{
+                result[fi] = activation.apply(result[fi]);
+            });
+            return result;            
+        }
+    }
+    static ConvolutionForwardKernel convolutionForwardKernel = new ConvolutionForwardKernel();
     /** 畳み込み層 */
     static class ConvolutionLayer extends ImageNeuralLayer{
         double[] filter;
@@ -200,40 +297,9 @@ public class ConvolutionalNet {
         /** 畳み込みフィルタを適用する */
         @Override
         double[] forward(double[] img) {
-            int width = inputWidth;
-            int height = inputHeight;
-            result = new double[outputChannels * outputWidth * outputHeight];
-            IntStream.range(0, outputChannels).parallel().forEach(fi ->{
-                for(int x = 0; x < outputWidth; ++x){
-                    for(int y = 0; y < outputHeight; ++y){
-                        for(int ch = 0; ch < inputChannels; ++ch){
-                            for(int i = 0; i < filterSize; ++i){
-                                int xx = x * stride + i - filterSize / 2;
-                                if(xx < 0 || xx >= width){
-                                    continue;
-                                }
-                                for(int j = 0; j < filterSize; ++j){
-                                    int yy = y * stride + j - filterSize / 2;
-                                    if(yy < 0 || yy >= height){
-                                        continue;
-                                    }
-                                    result[fi * outputWidth * outputHeight + x * outputHeight + y] += 
-                                            img[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
-                                            filter[fi * inputChannels * filterSize * filterSize + 
-                                                ch * filterSize * filterSize + i * filterSize + j];
-                                }
-                            }
-                        }
-                        result[fi * outputWidth * outputHeight + x * outputHeight + y] += bias[fi];
-                    }
-                }
-                for(int x = 0; x < width / stride; ++x){
-                    for(int y = 0; y < height / stride; ++y){
-                        result[fi * outputWidth * outputHeight + x * outputHeight + y] =
-                                activation.apply(result[fi * outputWidth * outputHeight + x * outputHeight + y]);
-                    }
-                }
-            });
+            result = convolutionForwardKernel.forward(img, inputChannels, inputWidth, inputHeight, 
+                filter, outputChannels, outputWidth, outputHeight, filterSize, stride,
+                bias, activation);
             return result;
         }
 

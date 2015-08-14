@@ -798,17 +798,9 @@ public class ConvolutionalNet {
     static Random r = new Random();
     static double[][] createRandomFilter(int size, int channel){
         double [][] result = new double[size][size];
-        double total = 0;
         for(int i = 0; i < size; ++i){
             for(int j = 0; j < size; ++j){
                 result[i][j] = (r.nextDouble() * 2 - .5) / size / size / channel;
-                total += result[i][j];
-            }
-        }
-        //total = (total + 1) / (size * size);
-        for(int i = 0; i < size; ++i){
-            for(int j = 0; j < size; ++j){
-                //result[i][j] /= total;
             }
         }
         

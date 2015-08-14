@@ -188,6 +188,7 @@ public class ConvolutionalNet {
         double[] filter;
         double[] bias;
         int stride;
+        int filterSize;
         public ConvolutionLayer(String name, int channel, int width, int height, int filterCount,  int size, int stride) {
             super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
             this.filter = random.doubles(size * size * channel * filterCount)
@@ -195,15 +196,15 @@ public class ConvolutionalNet {
                     .toArray();
             this.bias = DoubleStream.generate(() -> .1).limit(filterCount).toArray();
             this.stride = stride;
+            this.filterSize = size;
         }
         /** 畳み込みフィルタを適用する */
         @Override
         double[] forward(double[] img) {
             int width = inputWidth;
             int height = inputHeight;
-            int filterSize = outputChannels;
             result = new double[outputChannels * outputWidth * outputHeight];
-            IntStream.range(0, filter.length).parallel().forEach(fi ->{
+            IntStream.range(0, outputChannels).parallel().forEach(fi ->{
                 for(int x = 0; x < outputWidth; ++x){
                     for(int y = 0; y < outputHeight; ++y){
                         for(int ch = 0; ch < inputChannels; ++ch){
@@ -239,35 +240,34 @@ public class ConvolutionalNet {
 
         /** 畳み込み層の学習 */
         @Override
-        double[][][] backword(double[][][] input, double[][][] delta, ActivationFunction act){
-            double[][][] newDelta = new double[input.length][input[0].length][input[0][0].length];
-            double[][][][] oldfilter = Arrays.stream(filter).parallel()
-                    .map(f -> Arrays.stream(f)
-                            .map(ch -> Arrays.stream(ch)
-                                    .map(row -> Arrays.copyOf(row, row.length))
-                                    .toArray(double[][]::new)
-                            ).toArray(double[][][]::new))
-                    .toArray(double[][][][]::new);
+        double[] backword(double[] input, double[] delta, ActivationFunction act){
+            double[] newDelta = new double[input.length];
+            double[] oldfilter = Arrays.copyOf(filter, filter.length);
             
-            double localEp = ep / (delta[0].length * delta[0][0].length);
-            double[][][][] tempDelta = new double[filter.length][input.length][input[0].length][input[0][0].length];
+            double localEp = ep / (outputWidth * outputHeight);
+            double[] tempDelta = new double[outputChannels * inputChannels * inputWidth * inputHeight];
             IntStream.range(0, filter.length).parallel().forEach(f -> {
-                for(int x = 0; x < input[0].length / stride; ++x){
-                    for(int y = 0; y < input[0][0].length / stride; ++y){
-                        double d = act.diff(result[f][x][y]) * delta[f][x][y];
-                        for(int ch = 0; ch < filter[f].length; ++ch){
-                            for(int i = 0; i < filter[0][0].length; ++i){
-                                int xx = x * stride + i - filter[0][0].length / 2;
-                                if(xx < 0 || xx >= input[0].length){
+                for(int x = 0; x < outputWidth; ++x){
+                    for(int y = 0; y < outputHeight; ++y){
+                        int fxy = f * outputWidth * outputHeight;
+                        double d = act.diff(result[fxy]) * delta[fxy];
+                        for(int ch = 0; ch < inputChannels; ++ch){
+                            for(int i = 0; i < filterSize; ++i){
+                                int xx = x * stride + i - filterSize / 2;
+                                if(xx < 0 || xx >= inputWidth){
                                     continue;
                                 }
-                                for(int j = 0; j < filter[0][0][0].length; ++j){
-                                    int yy = y * stride + j - filter[0][0][0].length / 2;
-                                    if(yy < 0 || yy >= input[0][0].length){
+                                for(int j = 0; j < filterSize; ++j){
+                                    int yy = y * stride + j - filterSize / 2;
+                                    if(yy < 0 || yy >= inputHeight){
                                         continue;
                                     }
-                                    tempDelta[f][ch][x][y] += d * oldfilter[f][ch][i][j];
-                                    filter[f][ch][i][j] += d * localEp * input[ch][xx][yy];
+                                    tempDelta[f *  inputChannels * inputWidth * inputHeight +
+                                            ch * inputWidth * inputHeight + x * inputHeight + y] += 
+                                                d * oldfilter[f * inputChannels * filterSize * filterSize + 
+                                                    ch * filterSize * filterSize + i * filterSize + j];
+                                    filter[f * inputChannels * filterSize * filterSize + 
+                                                    ch * filterSize * filterSize + i * filterSize + j] += d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
                                 }
                             }
                         }
@@ -275,13 +275,9 @@ public class ConvolutionalNet {
                     }
                 }
             });
-            IntStream.range(0, filter[0].length).parallel().forEach(ch -> {
-                for(int f = 0; f < filter.length; ++f){
-                    for(int x = 0; x < input[0].length / stride; ++x){
-                        for(int y = 0; y < input[0][0].length / stride; ++y){
-                            newDelta[ch][x][y] += tempDelta[f][ch][x][y];
-                        }
-                    }
+            IntStream.range(0, inputChannels * inputWidth * inputHeight).parallel().forEach(chxy -> {
+                for(int f = 0; f < outputChannels; ++f){
+                    newDelta[chxy] += tempDelta[f * inputChannels * inputWidth * inputHeight + chxy];
                 }
             });
             return newDelta;

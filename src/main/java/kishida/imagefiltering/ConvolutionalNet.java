@@ -115,13 +115,13 @@ public class ConvolutionalNet {
         
     }
     
-    static abstract class ImageNouralLayer{
+    static abstract class ImageNeuralLayer{
         String name;
         double[][][] result;
-        ImageNouralLayer preLayer;
+        ImageNeuralLayer preLayer;
         ActivationFunction activation;
 
-        public ImageNouralLayer(String name, ActivationFunction activation) {
+        public ImageNeuralLayer(String name, ActivationFunction activation) {
             this.name = name;
             this.activation = activation;
         }
@@ -146,7 +146,7 @@ public class ConvolutionalNet {
         
     }
     
-    static class InputFilter extends ImageNouralLayer{
+    static class InputFilter extends ImageNeuralLayer{
 
         public InputFilter() {
             super("入力", new LinearFunction());
@@ -167,7 +167,7 @@ public class ConvolutionalNet {
     }
     
     /** 畳み込み層 */
-    static class ConvolutionLayer extends ImageNouralLayer{
+    static class ConvolutionLayer extends ImageNeuralLayer{
         double[][][][] filter;
         double[] bias;
         int stride;
@@ -268,7 +268,7 @@ public class ConvolutionalNet {
         }
     }
     
-    static class MaxPoolingLayer extends ImageNouralLayer{
+    static class MaxPoolingLayer extends ImageNeuralLayer{
         int size;
         int stride;
 
@@ -343,7 +343,7 @@ public class ConvolutionalNet {
         }
     }
     
-    static class NormalizeLayer extends ImageNouralLayer{
+    static class NormalizeLayer extends ImageNeuralLayer{
         double[][][] averages;
         double[][][] rates;
         int size;
@@ -492,7 +492,7 @@ public class ConvolutionalNet {
                 .map(p -> p.getFileName().toString())
                 .filter(n -> !n.startsWith("_"))
                 .collect(Collectors.toList());
-        List<ImageNouralLayer> layers = new ArrayList<>();
+        List<ImageNeuralLayer> layers = new ArrayList<>();
         InputFilter input = new InputFilter();
         layers.add(input);
         //一段目
@@ -708,9 +708,9 @@ public class ConvolutionalNet {
         return f;
     }
     
-    static double[] forward(List<ImageNouralLayer> layers, FullyConnect fc1, FullyConnect fc2,
+    static double[] forward(List<ImageNeuralLayer> layers, FullyConnect fc1, FullyConnect fc2,
             double[][][] readData, double[] correctData){
-        ImageNouralLayer norm2 = layers.get(layers.size() - 1);
+        ImageNeuralLayer norm2 = layers.get(layers.size() - 1);
         layers.get(0).result = readData;
         for(int i = 1; i < layers.size(); ++i){
             layers.get(i).preLayer = layers.get(i - 1);

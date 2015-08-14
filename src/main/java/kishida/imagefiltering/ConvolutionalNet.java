@@ -39,7 +39,7 @@ import javax.swing.JTabbedPane;
 public class ConvolutionalNet {
     static final double ep = 0.0001;
     static Random random = new Random();
-    static final boolean USE_GPU = false;
+    static final boolean USE_GPU = true;
 
     static class Img{
 
@@ -191,8 +191,8 @@ public class ConvolutionalNet {
         
         @Override
         public void run() {
-            int xy = getGlobalId();
-            proc(xy);
+            int fixy = getGlobalId();
+            proc(fixy);
         }
         
         private void proc(int fixy){
@@ -265,6 +265,10 @@ public class ConvolutionalNet {
     static ConvolutionForwardKernel convolutionForwardKernel = new ConvolutionForwardKernel();
     static ConvolutionBackwordKernel convolutionBackwordKernel = new ConvolutionBackwordKernel();
     static class ConvolutionBackwordKernel extends Kernel{
+
+        public ConvolutionBackwordKernel() {
+            setExplicit(true);
+        }
 
         @Override
         public void run() {
@@ -645,9 +649,11 @@ public class ConvolutionalNet {
                                 Stream.of(new Img(p, true, i, j), new Img(p, false, i, j)))
                                 .flatMap(s -> s)).flatMap(s -> s))
                 .collect(Collectors.toList());
+        int[] count = {0};
         for(int loop = 0; loop < 4; ++loop){
         Collections.shuffle(files);
         long start = System.currentTimeMillis();
+        long[] pStart = {start};
         files.stream().forEach(img -> {
             Path p = img.filename;
             String catName = p.getParent().getFileName().toString();
@@ -719,7 +725,14 @@ public class ConvolutionalNet {
             secondBias.setIcon(new ImageIcon(createGraph(500, 128, ((ConvolutionLayer)layers.get(4)).bias)));
             fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.bias)));
             fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.bias)));
-            
+            count[0]++;
+            if(count[0] >= 10){
+                System.out.printf("%4d %.2f %s %s%n", count[0], 10 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
+                        convolutionForwardKernel.getExecutionMode(),
+                        convolutionBackwordKernel.getExecutionMode());
+                count[0] = 0;
+                pStart[0] = System.currentTimeMillis();
+            }
         });
         long end = System.currentTimeMillis();
         System.out.println(end - start);

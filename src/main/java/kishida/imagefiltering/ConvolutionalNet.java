@@ -1,6 +1,7 @@
 package kishida.imagefiltering;
 
 import com.amd.aparapi.Kernel;
+import com.amd.aparapi.Range;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -37,9 +38,11 @@ import javax.swing.JTabbedPane;
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.0001;
+    static final double ep = 0.00001;
     static Random random = new Random();
-    static final boolean USE_GPU = true;
+    static final boolean USE_GPU = false;
+    static final int FILTER_1ST = 16;
+    static final int FILTER_2ND = 12;
 
     static class Img{
 
@@ -249,6 +252,7 @@ public class ConvolutionalNet {
             if(useGpu){
                 put(input);
                 put(filter);
+                put(bias);
                 execute( outputChannels * outputWidth * outputHeight);
                 get(result);
             }else{
@@ -292,11 +296,14 @@ public class ConvolutionalNet {
                             continue;
                         }
                         tempDelta[f *  inputChannels * inputWidth * inputHeight +
-                                ch * inputWidth * inputHeight + x * inputHeight + y] += 
-                                    d * oldfilter[f * inputChannels * filterSize * filterSize + 
-                                        ch * filterSize * filterSize + i * filterSize + j];
+                                    ch * inputWidth * inputHeight + xx * inputHeight + yy] += 
+                                d * oldfilter[f * inputChannels * filterSize * filterSize + 
+                                    ch * filterSize * filterSize + i * filterSize + j];
+                        
                         filter[f * inputChannels * filterSize * filterSize + 
-                                        ch * filterSize * filterSize + i * filterSize + j] += d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                                        ch * filterSize * filterSize + i * filterSize + j] += 
+                                d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                        
                     }
                 }
             }
@@ -618,9 +625,6 @@ public class ConvolutionalNet {
         InputFilter input = new InputFilter(256, 256);
         layers.add(input);
         
-        final int FILTER_1ST = 48;
-        final int FILTER_2ND = 96;
-        
         //一段目
         layers.add(new ConvolutionLayer("conv1", 3, 256, 256, FILTER_1ST, 11, 4, USE_GPU));
         //一段目のプーリング
@@ -628,7 +632,7 @@ public class ConvolutionalNet {
         //一段目の正規化
         layers.add(new NormalizeLayer("norm1", 5, .1, FILTER_1ST, 256 / 8, 256 / 8));
         //二段目
-        layers.add(new ConvolutionLayer("conv2", FILTER_1ST, 256 / 8, 256 / 8, FILTER_2ND, 5, 2, USE_GPU));
+        layers.add(new ConvolutionLayer("conv2", FILTER_1ST, 256 / 8, 256 / 8, FILTER_2ND, 5, 2, false));
         //二段目のプーリング
         layers.add(new MaxPoolingLayer("pool2", 3, 2, FILTER_2ND, 256 / 16, 256 / 16));
         
@@ -674,6 +678,7 @@ public class ConvolutionalNet {
 
             double[] output = forward(layers, fc1, fc2, readData, correctData);
             //元画像の表示
+            
             org.setIcon(new ImageIcon(resized));
             
             //判定結果
@@ -725,6 +730,7 @@ public class ConvolutionalNet {
             secondBias.setIcon(new ImageIcon(createGraph(500, 128, ((ConvolutionLayer)layers.get(4)).bias)));
             fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.bias)));
             fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.bias)));
+            
             count[0]++;
             if(count[0] >= 10){
                 System.out.printf("%4d %.2f %s %s%n", count[0], 10 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
@@ -776,17 +782,17 @@ public class ConvolutionalNet {
     static JLabel org = new JLabel();
     static JLabel firstFc = new JLabel();
     static JLabel lastResult = new JLabel();
-    static JLabel[] filtersLabel = Stream.generate(() -> new JLabel()).limit(48)
+    static JLabel[] filtersLabel = Stream.generate(() -> new JLabel()).limit(FILTER_1ST)
             .toArray(JLabel[]::new);
     static JLabel firstBias = new JLabel();
     static JLabel secondBias = new JLabel();
     static JLabel fc1Bias = new JLabel();
     static JLabel fc2Bias = new JLabel();
-    static JLabel[] filteredLabel = Stream.generate(() -> new JLabel()).limit(48)
+    static JLabel[] filteredLabel = Stream.generate(() -> new JLabel()).limit(FILTER_1ST)
             .toArray(JLabel[]::new);
-    static JLabel[] pooledLabel = Stream.generate(() -> new JLabel()).limit(48)
+    static JLabel[] pooledLabel = Stream.generate(() -> new JLabel()).limit(FILTER_1ST)
             .toArray(JLabel[]::new);
-    static JLabel[] normedLabel = Stream.generate(() -> new JLabel()).limit(48)
+    static JLabel[] normedLabel = Stream.generate(() -> new JLabel()).limit(FILTER_1ST)
             .toArray(JLabel[]::new);
     static JLabel historyLabel = new JLabel();
     
@@ -807,23 +813,25 @@ public class ConvolutionalNet {
         northRight.add(lastResult);
         
         //中段
+        int h = 3;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
+        int w = 5;//FILTER_1ST / h;
         JTabbedPane tab = new JTabbedPane(JTabbedPane.RIGHT);
         f.add(tab);
         JPanel middle = new JPanel();
         tab.add("filter", middle);
-        middle.setLayout(new GridLayout(6, 8));
+        middle.setLayout(new GridLayout(h, w));
         Arrays.stream(filtersLabel).forEach(middle::add);
         JPanel filtered = new JPanel();
         tab.add("filtered", filtered);
-        filtered.setLayout(new GridLayout(6, 8));
+        filtered.setLayout(new GridLayout(h, w));
         Arrays.stream(filteredLabel).forEach(filtered::add);
         JPanel pooled = new JPanel();
         tab.add("pooled", pooled);
-        pooled.setLayout(new GridLayout(6, 8));
+        pooled.setLayout(new GridLayout(h, w));
         Arrays.stream(pooledLabel).forEach(pooled::add);
         JPanel normed = new JPanel();
         tab.add("normed", normed);
-        normed.setLayout(new GridLayout(6, 8));
+        normed.setLayout(new GridLayout(h, w));
         Arrays.stream(normedLabel).forEach(normed::add);
         
         //下段

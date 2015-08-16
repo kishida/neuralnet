@@ -32,8 +32,8 @@ public class KernelBench {
 
         fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, false);
         bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, false);
-        //fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
-        //bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true);
+        fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
+        bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true);
         
         bench("1st gpu", () -> 
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true));

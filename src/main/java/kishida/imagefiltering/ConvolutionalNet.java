@@ -1,7 +1,6 @@
 package kishida.imagefiltering;
 
 import com.amd.aparapi.Kernel;
-import com.amd.aparapi.Range;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -202,6 +201,7 @@ public class ConvolutionalNet {
             int fi = fixy / (outputHeight * outputWidth);
             int x = (fixy % (outputHeight * outputWidth)) / outputHeight;
             int y = fixy % outputHeight;
+            double r = 0; // 毎回resultを足すよりもまとめて足したほうがGPUの場合に速くなる。
             for(int ch = 0; ch < inputChannels; ++ch){
                 for(int i = 0; i < filterSize; ++i){
                     int xx = x * stride + i - filterSize / 2;
@@ -209,8 +209,7 @@ public class ConvolutionalNet {
                         for(int j = 0; j < filterSize; ++j){
                             int yy = y * stride + j - filterSize / 2;
                             if(yy >= 0 && yy < inputHeight){
-                                result[fixy] += 
-                                        input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
+                                r += input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
                                         filter[fi * inputChannels * filterSize * filterSize + 
                                             ch * filterSize * filterSize + i * filterSize + j];
                             }
@@ -218,7 +217,7 @@ public class ConvolutionalNet {
                     }
                 }
             }
-            result[fixy] += bias[fi];
+            result[fixy] += r + bias[fi];
         }
         
         double[] result;
@@ -287,23 +286,19 @@ public class ConvolutionalNet {
             for(int ch = 0; ch < inputChannels; ++ch){
                 for(int i = 0; i < filterSize; ++i){
                     int xx = x * stride + i - filterSize / 2;
-                    if(xx < 0 || xx >= inputWidth){
-                        continue;
-                    }
-                    for(int j = 0; j < filterSize; ++j){
-                        int yy = y * stride + j - filterSize / 2;
-                        if(yy < 0 || yy >= inputHeight){
-                            continue;
+                    if(xx >= 0 && xx < inputWidth){
+                        for(int j = 0; j < filterSize; ++j){
+                            int yy = y * stride + j - filterSize / 2;
+                            if(yy >= 0 && yy < inputHeight){
+                                tempDelta[f *  inputChannels * inputWidth * inputHeight +
+                                            ch * inputWidth * inputHeight + xx * inputHeight + yy] += 
+                                        d * oldfilter[f * inputChannels * filterSize * filterSize + 
+                                            ch * filterSize * filterSize + i * filterSize + j];
+                                filter[f * inputChannels * filterSize * filterSize + 
+                                                ch * filterSize * filterSize + i * filterSize + j] += 
+                                        d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                            }
                         }
-                        tempDelta[f *  inputChannels * inputWidth * inputHeight +
-                                    ch * inputWidth * inputHeight + xx * inputHeight + yy] += 
-                                d * oldfilter[f * inputChannels * filterSize * filterSize + 
-                                    ch * filterSize * filterSize + i * filterSize + j];
-                        
-                        filter[f * inputChannels * filterSize * filterSize + 
-                                        ch * filterSize * filterSize + i * filterSize + j] += 
-                                d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
-                        
                     }
                 }
             }
@@ -358,8 +353,10 @@ public class ConvolutionalNet {
                 get(tempDelta);
                 get(bias);
             }else{
-                IntStream.range(0, outputChannels * outputWidth * outputHeight).parallel().forEach(fxy -> {
-                    proc(fxy);
+                IntStream.range(0, outputChannels).parallel().forEach(f -> {
+                    for(int xy = 0; xy <  outputWidth * outputHeight; ++xy){
+                        proc(f * outputWidth * outputHeight + xy);
+                    }
                 });
             }
             double[] newDelta = new double[input.length];
@@ -406,7 +403,7 @@ public class ConvolutionalNet {
             return convolutionBackwordKernel.backword(delta, result,
                     input, inputChannels, inputWidth, inputHeight, 
                     filter, outputChannels, outputWidth, outputHeight,
-                    filterSize, stride, bias, act, useGpu);
+                    filterSize, stride, bias, act, false);
         }
     }
     
@@ -632,7 +629,7 @@ public class ConvolutionalNet {
         //一段目の正規化
         layers.add(new NormalizeLayer("norm1", 5, .1, FILTER_1ST, 256 / 8, 256 / 8));
         //二段目
-        layers.add(new ConvolutionLayer("conv2", FILTER_1ST, 256 / 8, 256 / 8, FILTER_2ND, 5, 2, false));
+        layers.add(new ConvolutionLayer("conv2", FILTER_1ST, 256 / 8, 256 / 8, FILTER_2ND, 5, 2, USE_GPU));
         //二段目のプーリング
         layers.add(new MaxPoolingLayer("pool2", 3, 2, FILTER_2ND, 256 / 16, 256 / 16));
         
@@ -654,8 +651,8 @@ public class ConvolutionalNet {
                                 .flatMap(s -> s)).flatMap(s -> s))
                 .collect(Collectors.toList());
         int[] count = {0};
-        for(int loop = 0; loop < 4; ++loop){
-        Collections.shuffle(files);
+        for(int loop = 0; loop < 30; ++loop){
+        Collections.shuffle(files, random);
         long start = System.currentTimeMillis();
         long[] pStart = {start};
         files.stream().forEach(img -> {
@@ -874,16 +871,17 @@ public class ConvolutionalNet {
         double[] flattenPooled2 = norm2.getResult();
         //全結合一段
         double[] fc1out = fc1.forward(flattenPooled2);
+        double[] fc1outRe = Arrays.stream(fc1out).map(d -> d > 0 ? d : 0).toArray();
         //全結合二段
-        double[] fc2out = fc2.forward(fc1out);
-        System.out.println(Arrays.stream(fc2out).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
+        double[] fc2out = fc2.forward(fc1outRe);
+        //System.out.println(Arrays.stream(fc2out).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //ソフトマックス
         double[] output = softMax(fc2out);
         //結果を書き戻しておく
         for(int i = 0; i < fc2.result.length; ++i){
             fc2.result[i] = output[i];
         }
-        System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
+        //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));
         //全結合二段の逆伝播
         double[] delta = IntStream.range(0, output.length)
                 .mapToDouble(idx -> correctData[idx] - output[idx])

@@ -623,7 +623,7 @@ public class ConvolutionalNet {
         JFrame f = createFrame();
         f.setVisible(true);
         
-        Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg");
+        Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg288");
         List<String> categories = Files.list(dir)
                 .filter(p -> Files.isDirectory(p))
                 .map(p -> p.getFileName().toString())
@@ -945,7 +945,7 @@ public class ConvolutionalNet {
         return img;
     }
     
-    private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
+    static BufferedImage resize(BufferedImage imgRead, int width, int height) {
         return resize(imgRead, width, height, true, false);
     }
     private static BufferedImage resize(BufferedImage imgRead, int width, int height, boolean bicubic, boolean inverse) {

@@ -115,7 +115,7 @@ public class ConvolutionalNet {
 
         @Override
         public double diff(double value) {
-            return value * (1 - value);
+            return value;// * (1 - value);
         }
         
     }
@@ -563,19 +563,27 @@ public class ConvolutionalNet {
         double[] bias;
         int out;
         double[] result;
+        int[] dropout;
         String name;
-        public FullyConnect(String name, int in, int out) {
+        double dropoutRate = 1;
+        public FullyConnect(String name, int in, int out, double dropoutRate) {
             this.name = name;
             this.out = out;
             weight = Stream.generate(() -> 
                     DoubleStream.generate(() -> (random.nextDouble() * 1.5 - .5) / in).limit(out).toArray()
             ).limit(in).toArray(double[][]::new);
             bias = DoubleStream.generate(() -> .1).limit(out).toArray();
+            dropout = IntStream.generate(() -> 1).limit(out).toArray();
+            this.dropoutRate = dropoutRate;
+        }
+        
+        public void prepareDropout(){
+            dropout = random.doubles(out).mapToInt(d -> d < dropoutRate ? 1 : 0).toArray();
         }
         
         public double[] forward(double[] in){
             result = new double[out];
-            IntStream.range(0, out).parallel().forEach(j -> {
+            IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
                 for(int i = 0; i < in.length; ++i){
                     result[j] += in[i] * weight[i][j];
                 }
@@ -592,6 +600,9 @@ public class ConvolutionalNet {
             
             IntStream.range(0, in.length).parallel().forEach(i -> {
                 for(int j = 0; j < out; ++j){
+                    if(dropout[j] != 1){
+                        continue;
+                    }
                     double d = act.diff(result[j]) * delta[j];
                     newDelta[i] += d * oldweight[i][j];
                     weight[i][j] += d * ep * in[i];
@@ -637,9 +648,9 @@ public class ConvolutionalNet {
         layers.add(norm2);
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", FILTER_2ND * 256 / 32 * 256 / 32, 32);
+        FullyConnect fc1 = new FullyConnect("fc1", FILTER_2ND * 256 / 32 * 256 / 32, 32, 0.5);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size());
+        FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size(), 1);
         
         //Path p = dir.resolve("cat\\DSC00800.JPG");
         List<Img> files = Files.walk(dir)
@@ -870,6 +881,7 @@ public class ConvolutionalNet {
         */
         double[] flattenPooled2 = norm2.getResult();
         //全結合一段
+        fc1.prepareDropout();
         double[] fc1out = fc1.forward(flattenPooled2);
         double[] fc1outRe = Arrays.stream(fc1out).map(d -> d > 0 ? d : 0).toArray();
         //全結合二段

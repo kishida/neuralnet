@@ -14,6 +14,9 @@ import java.util.Random;
 public class KernelBench {
     static ConvolutionalNet.ConvolutionForwardKernel fKernel = new ConvolutionalNet.ConvolutionForwardKernel();
     static ConvolutionalNet.ConvolutionBackwordKernel bKernel = new ConvolutionalNet.ConvolutionBackwordKernel();
+    static ConvolutionalNet.ConvolutionBackwordDeltaKernel bdKernel = new ConvolutionalNet.ConvolutionBackwordDeltaKernel();
+    static ConvolutionalNet.ConvolutionBackwordFilterKernel bfKernel = new ConvolutionalNet.ConvolutionBackwordFilterKernel();
+    static ConvolutionalNet.ConvolutionBackwordBiasKernel bbKernel = new ConvolutionalNet.ConvolutionBackwordBiasKernel();
     public static void main(String[] args) {
         Random r = new Random();
         
@@ -30,10 +33,63 @@ public class KernelBench {
         
         ConvolutionalNet.RetifierdLinear act = new ConvolutionalNet.RetifierdLinear();
 
+        bench("complex optimize gpu", () -> {
+            fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
+            fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
+            
+            bdKernel.backword(delta2, result2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
+            bfKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
+            bbKernel.backwordBias(delta2, result2, 96, 16, 16, bias2, true);
+            
+            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
+        });
+        bench("complex gpu", () -> {
+            fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
+            fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
+            bKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
+            bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true);
+        });        
+        
+        bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
+        bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+        bench("1st filter gpu", () ->
+            bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true));
+        bench("1st filter cpu", () ->
+            bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, false));
+        
+        bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
+        bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+        bench("1st delta gpu", () ->
+            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true));
+        bench("1st delta cpu", () ->
+            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false));
+        
+        bbKernel.backwordBias(delta, result, 48, 128, 128, bias, false);
+        bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
+        bench("1st bias gpu", () ->
+            bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true));
+        bench("1st bias cpu", () ->
+            bbKernel.backwordBias(delta, result, 48, 128, 128, bias, false));
+        
+        bench("1st delta filter bias gpu", () ->{
+            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
+        });
+        bench("1st delta filter bias cpu", () ->{
+            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
+            bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
+            bbKernel.backwordBias(delta, result, 48, 128, 128, bias, false);
+        });
+        
         fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, false);
         bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, false);
         fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
         bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true);
+        
+        
         
         bench("1st gpu", () -> 
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true));
@@ -58,6 +114,18 @@ public class KernelBench {
         bench("2st back cpu", () -> 
             bKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, false));
         
+        bench("complex optimize gpu", () -> {
+            fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
+            fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
+            
+            bdKernel.backword(delta2, result2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
+            bfKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
+            bbKernel.backwordBias(delta2, result2, 96, 16, 16, bias2, true);
+            
+            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
+        });
         bench("complex gpu", () -> {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
             fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
@@ -78,7 +146,7 @@ public class KernelBench {
             proc.run();
         }
         long start = System.currentTimeMillis();
-        for (int i = 0; i < 50; ++i) {
+        for (int i = 0; i < 100; ++i) {
             proc.run();
         }
         System.out.printf("%s:%.3fs%n", name, (System.currentTimeMillis() - start) / 1000.);

@@ -17,6 +17,7 @@ public class KernelBench {
     static ConvolutionalNet.ConvolutionBackwordDeltaKernel bdKernel = new ConvolutionalNet.ConvolutionBackwordDeltaKernel();
     static ConvolutionalNet.ConvolutionBackwordFilterKernel bfKernel = new ConvolutionalNet.ConvolutionBackwordFilterKernel();
     static ConvolutionalNet.ConvolutionBackwordBiasKernel bbKernel = new ConvolutionalNet.ConvolutionBackwordBiasKernel();
+    static ConvolutionalNet.NormalizeKernel nKernel = new ConvolutionalNet.NormalizeKernel();
     public static void main(String[] args) {
         Random r = new Random();
         
@@ -32,7 +33,13 @@ public class KernelBench {
         double[] delta2 = r.doubles(result2.length).toArray();
         
         ConvolutionalNet.RetifierdLinear act = new ConvolutionalNet.RetifierdLinear();
-
+        double[] averages = new double[48 * 32 * 32];
+        double[] rates = new double[averages.length];
+        bench("normalize gpu", () -> 
+            nKernel.normalize(input, 48, 32, 32, 5, averages, rates, .1, true));
+        bench("normalize cpu", () -> 
+            nKernel.normalize(input, 48, 32, 32, 5, averages, rates, .1, false));
+        
         bench("complex optimize gpu", () -> {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
             fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);

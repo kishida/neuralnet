@@ -38,11 +38,11 @@ import javax.swing.JTabbedPane;
  */
 public class ConvolutionalNet {
     static final double ep = 0.00001;
-    static Random random = new Random();
+    static Random random = new Random(1234);
     static final boolean USE_GPU1 = true;
-    static final boolean USE_GPU2 = false;
+    static final boolean USE_GPU2 = true;
     static final int FILTER_1ST = 16;
-    static final int FILTER_2ND = 12;
+    static final int FILTER_2ND = 24;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
 
@@ -742,25 +742,119 @@ public class ConvolutionalNet {
         }
     }
     
+    static NormalizeKernel normalizeKernel = new NormalizeKernel();
+    static class NormalizeKernel extends Kernel{
+
+        public NormalizeKernel(){
+            setExplicit(true);
+        }
+        
+        @Override
+        public void run() {
+            int chxy = getGlobalId();
+            proc(chxy);
+        }
+        
+        private void proc(int chxy){
+            int ch = chxy / (inputWidth * inputHeight);
+            int x = (chxy % (inputWidth * inputHeight)) / inputHeight;
+            int y = chxy % inputHeight;
+            //平均
+            int count = 0;
+            double total = 0;
+            for(int i = 0; i < size; ++i){
+                int xx = x + i - size / 2;
+                if(xx >= 0 && xx < inputWidth){
+                    for(int j = 0; j < size; ++j){
+                        int yy = y + j - size / 2;
+                        if(yy >= 0 && yy < inputHeight){
+                            total += input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                            ++count;
+                        }
+                    }
+                }
+            }
+            double average = total / count;
+            //分散
+            double variance = 0;
+            for(int i = 0; i < size; ++i){
+                int xx = x + i - size / 2;
+                if(xx >= 0 && xx < inputWidth){
+                    for(int j = 0; j < size; ++j){
+                        int yy = y + j - size / 2;
+                        if(yy >= 0 && yy < inputHeight){
+                            double d = input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                            variance += (d - average) * (d - average);
+                        }
+                    }
+                }
+            }
+            double std = max(threshold, sqrt(variance / count));
+            result[chxy] = (input[chxy] - average) / std;
+            averages[chxy] = average;
+            rates[chxy] = std;
+        }
+        double[] averages;
+        double[] rates;
+        double[] result;
+        double[] input;
+        int inputChannels;
+        int inputWidth;
+        int inputHeight;
+        int size;
+        double threshold;
+        
+        double[] normalize(double[] input, int inputChannels, int inputWidth, int inputHeight, int size, double[] averages, double[] rates, double threshold, boolean useGpu){
+            this.input = input;
+            this.rates = rates;
+            this.result = new double[inputChannels * inputWidth * inputHeight];
+            this.averages = averages;
+            this.inputChannels = inputChannels;
+            this.inputWidth = inputWidth;
+            this.inputHeight = inputHeight;
+            this.size = size;
+            this.threshold = threshold;
+            
+            if(useGpu){
+                put(input);
+                execute(inputChannels * inputWidth * inputHeight);
+                get(averages);
+                get(rates);
+                get(result);
+            }else{
+                IntStream.range(0, inputChannels).parallel().forEach(ch -> {
+                    for(int x = 0; x < inputWidth; ++x){
+                        for(int y = 0; y < inputHeight; ++y){
+                            proc(ch * inputWidth * inputHeight + x * inputHeight + y);
+                        }
+                    }
+                });
+            }
+            
+            return result;
+        }
+    }
+    
     static class NormalizeLayer extends ImageNeuralLayer{
         double[] averages;
         double[] rates;
         int size;
         double threshold;
-        public NormalizeLayer(String name, int size, double threshold, int channels, int width, int height) {
+        boolean useGpu;
+        public NormalizeLayer(String name, int size, double threshold, int channels, int width, int height, boolean useGpu) {
             super(name, new LinearFunction(), channels, width, height, channels, width, height);
             this.size = size;
             this.threshold = threshold;
+            this.useGpu = useGpu;
         }
-
-        
         
         @Override
         double[] forward(double[] in) {
             averages = new double[in.length];
             rates = new double[in.length];
-            result = new double[in.length];
+            result = normalizeKernel.normalize(in, inputChannels, inputWidth, inputHeight, size, averages, rates, threshold, useGpu);
             
+            /*
             IntStream.range(0, inputChannels).parallel().forEach(ch -> {
                 for(int lx = 0; lx < inputWidth; ++lx){
                     int x = lx;
@@ -800,7 +894,7 @@ public class ConvolutionalNet {
                     }
                 }
             });
-            
+            */
             return result;
         }
 
@@ -893,13 +987,13 @@ public class ConvolutionalNet {
         //一段目のプーリング
         layers.add(new MaxPoolingLayer("pool1", 3, 2, FILTER_1ST, 256 / 4, 256 / 4));
         //一段目の正規化
-        layers.add(new NormalizeLayer("norm1", 5, .1, FILTER_1ST, 256 / 8, 256 / 8));
+        layers.add(new NormalizeLayer("norm1", 5, .1, FILTER_1ST, 256 / 8, 256 / 8, USE_GPU1));
         //二段目
         layers.add(new ConvolutionLayer("conv2", FILTER_1ST, 256 / 8, 256 / 8, FILTER_2ND, 5, 2, USE_GPU2));
         //二段目のプーリング
         layers.add(new MaxPoolingLayer("pool2", 3, 2, FILTER_2ND, 256 / 16, 256 / 16));
         
-        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, FILTER_2ND, 256 / 32, 256 / 32);
+        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, FILTER_2ND, 256 / 32, 256 / 32, USE_GPU2);
         layers.add(norm2);
         
         //全結合1
@@ -1253,11 +1347,15 @@ public class ConvolutionalNet {
     }
     static BufferedImage arrayToImageMono(double[] filteredData, int idx, int width, int height){
         double[] colorData = new double[width * height * 3];
-        for(int i = 0; i < width * height; ++i){
-            colorData[i] = filteredData[idx * width * height + i];
-            colorData[i + width * height] = filteredData[idx * width * height + i];
-            colorData[i + width * height * 2] = filteredData[idx * width * height + i];
-        }
+        IntStream.range(0, width).parallel().forEach(x -> {
+            for(int y = 0; y < height; ++y){
+                int i = x * height + y;
+                double c = filteredData[idx * width * height + i];
+                colorData[i] = c;
+                colorData[i + width * height] = c;
+                colorData[i + width * height * 2] = c;
+            }
+        });
         return arrayToImage(colorData, 0, width, height);
     }
     /** 画像から配列へ変換 */

@@ -40,9 +40,10 @@ public class ConvolutionalNet {
     static final double ep = 0.00001;
     static Random random = new Random(1234);
     static final boolean USE_GPU1 = true;
-    static final boolean USE_GPU2 = true;
-    static final int FILTER_1ST = 16;
-    static final int FILTER_2ND = 24;
+    static final boolean USE_GPU2 = false;
+    static final int FILTER_1ST = 12;
+    static final int FILTER_2ND = 16;
+    static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
 
@@ -983,7 +984,7 @@ public class ConvolutionalNet {
         layers.add(input);
         
         //一段目
-        layers.add(new ConvolutionLayer("conv1", 3, 256, 256, FILTER_1ST, 11, 4, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv1", 3, 256, 256, FILTER_1ST, FILTER_1ST_SIZE, 4, USE_GPU1));
         //一段目のプーリング
         layers.add(new MaxPoolingLayer("pool1", 3, 2, FILTER_1ST, 256 / 4, 256 / 4));
         //一段目の正規化
@@ -1001,7 +1002,6 @@ public class ConvolutionalNet {
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size(), 1);
         
-        //Path p = dir.resolve("cat\\DSC00800.JPG");
         List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))
                 .filter(p -> !p.getParent().getFileName().toString().startsWith("_"))
@@ -1030,8 +1030,7 @@ public class ConvolutionalNet {
             }
             BufferedImage resized = resize(readImg, 256 + 32, 256 + 32, true, img.inverse);
             BufferedImage moved = move(resized, 256, 256, img.x * 16, img.y * 16);
-            double[] readData = imageToArray(moved);
-
+            double[] readData = normalize(imageToArray(moved));
 
             double[] output = forward(layers, fc1, fc2, readData, correctData);
             //元画像の表示
@@ -1066,7 +1065,7 @@ public class ConvolutionalNet {
             //一段目のフィルタの表示
             ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
             for(int i = 0; i < conv1.outputChannels; ++i){
-                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter, i, 11, 11), 44, 44, false, false)));
+                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.filter, i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
             }
             //フィルタ後の表示
             for(int i = 0; i < conv1.outputChannels; ++i){
@@ -1327,7 +1326,7 @@ public class ConvolutionalNet {
         DoubleSummaryStatistics summary = Arrays.stream(filteredData,
                 idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
                 .summaryStatistics();
-        double[] normed = Arrays.stream(filteredData, idx * width * height, (idx + 3) * width * height).parallel()
+        double[] normed = Arrays.stream(filteredData, idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
                         .map(d -> (d - summary.getMin()) 
                                 / (summary.getMax() - summary.getMin()))
                         .toArray();
@@ -1372,13 +1371,25 @@ public class ConvolutionalNet {
                 imageData[pos + 2 * width * height] = (rgb & 0xff) / 255.;
             }
         }
-        
-        DoubleSummaryStatistics summaryStatistics = Arrays.stream(imageData)
-                .summaryStatistics();
-        for(int ch = 0; ch < imageData.length; ++ch){
-            imageData[ch] -= summaryStatistics.getAverage();
-        }
         return imageData;
     }    
-    
+    static double[] normalize(double[] data){
+        int size = data.length / 3;
+        double[] result = new double[data.length];
+        for(int i = 0; i < 3; ++i){
+            int start = i * size;
+            int end = start + size;
+            // 平均
+            DoubleSummaryStatistics sum = Arrays.stream(data, start, end).parallel().summaryStatistics();
+            // 分散
+            double dist = Math.sqrt(Arrays.stream(data, start, end).parallel()
+                    .map(d -> (d - sum.getAverage()) * (d - sum.getAverage()))
+                    .sum() / sum.getCount());
+            // 正規化
+            for(int j = start; j < end; ++j){
+                result[j] = (data[j] - sum.getAverage()) / dist;
+            }
+        }
+        return result;
+    }
 }

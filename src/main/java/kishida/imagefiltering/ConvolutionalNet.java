@@ -915,13 +915,20 @@ public class ConvolutionalNet {
         int[] dropout;
         String name;
         double dropoutRate = 1;
+		double localEp;
         public FullyConnect(String name, int in, int out, double dropoutRate) {
+            this(name, in, out, Stream.generate(() ->
+                    DoubleStream.generate(() -> (random.nextDouble() * 1.5 - .5) / in).limit(out).toArray()
+            ).limit(in).toArray(double[][]::new),
+            DoubleStream.generate(() -> .1).limit(out).toArray(), dropoutRate, ep);
+
+		}
+        public FullyConnect(String name, int in, int out, double[][] weight, double[] bias, double dropoutRate, double localEp) {
             this.name = name;
             this.out = out;
-            weight = Stream.generate(() -> 
-                    DoubleStream.generate(() -> (random.nextDouble() * 1.5 - .5) / in).limit(out).toArray()
-            ).limit(in).toArray(double[][]::new);
-            bias = DoubleStream.generate(() -> .1).limit(out).toArray();
+			this.weight = weight;
+			this.bias = bias;
+			this.localEp = localEp;
             dropout = IntStream.generate(() -> 1).limit(out).toArray();
             this.dropoutRate = dropoutRate;
         }
@@ -954,12 +961,12 @@ public class ConvolutionalNet {
                     }
                     double d = act.diff(result[j]) * delta[j];
                     newDelta[i] += d * oldweight[i][j];
-                    weight[i][j] += d * ep * in[i];
+                    weight[i][j] += d * localEp * in[i];
                     
                 }
             });
             IntStream.range(0, out).parallel().forEach(j -> {
-                bias[j] += act.diff(result[j]) * delta[j] * ep;
+                bias[j] += act.diff(result[j]) * delta[j] * localEp;
             });
             return newDelta;
         }
@@ -972,7 +979,7 @@ public class ConvolutionalNet {
         JFrame f = createFrame();
         f.setVisible(true);
         
-        Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg288");
+        Path dir = Paths.get("/Users/FKST20197/Desktop/sampleimg288");
         List<String> categories = Files.list(dir)
                 .filter(p -> Files.isDirectory(p))
                 .map(p -> p.getFileName().toString())
@@ -1327,7 +1334,7 @@ public class ConvolutionalNet {
         DoubleSummaryStatistics summary = Arrays.stream(filteredData,
                 idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
                 .summaryStatistics();
-        double[] normed = Arrays.stream(filteredData, idx * width * height, (idx + 3) * width * height).parallel()
+        double[] normed = Arrays.stream(filteredData, idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
                         .map(d -> (d - summary.getMin()) 
                                 / (summary.getMax() - summary.getMin()))
                         .toArray();

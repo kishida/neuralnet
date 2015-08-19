@@ -987,16 +987,17 @@ public class ConvolutionalNet {
     static LinkedList<Integer> rateData = new LinkedList<>();
     
     public static void main(String[] args) throws IOException {
-        JFrame f = createFrame();
-        f.setVisible(true);
         
-        //Path dir = Paths.get("/Users/FKST20197/Desktop/sampleimg288");
-        Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg288");
+        Path dir = Paths.get(args[0]);
         List<String> categories = Files.list(dir)
                 .filter(p -> Files.isDirectory(p))
                 .map(p -> p.getFileName().toString())
                 .filter(n -> !n.startsWith("_"))
                 .collect(Collectors.toList());
+        
+        JFrame f = createFrame();
+        f.setVisible(true);
+        
         List<ImageNeuralLayer> layers = new ArrayList<>();
         InputFilter input = new InputFilter(256, 256);
         layers.add(input);

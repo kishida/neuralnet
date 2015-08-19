@@ -355,9 +355,11 @@ public class ConvolutionalNet {
                                     && y >= 0 && y < outputHeight){
                                 int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
                                 double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
+                                /*
                                 tempDelta += d * filter[f * inputChannels * filterSize * filterSize + 
                                             ch * filterSize * filterSize + i * filterSize + j];
-
+                                */
+                                tempDelta += d * input[chxxyy];
                             }
                         }
                     }
@@ -365,6 +367,7 @@ public class ConvolutionalNet {
             }
             newDelta[chxxyy] = tempDelta;
         }
+        double[] input;
         double[] result;
         int inputChannels;
         int inputWidth;
@@ -377,9 +380,10 @@ public class ConvolutionalNet {
         int stride;
         double[] delta;
         double[] newDelta;
-        double[] backword(double[] delta, double[] result, int inputChannels, int inputWidth, int inputHeight, 
+        double[] backword(double[] input, double[] delta, double[] result, int inputChannels, int inputWidth, int inputHeight, 
                 double[] filter, int outputChannels, int outputWidth, int outputHeight, int filterSize, int stride,
                 boolean useGpu){
+            this.input = input;
             this.delta = delta;
             this.inputChannels = inputChannels;
             this.inputWidth = inputWidth;
@@ -523,8 +527,11 @@ public class ConvolutionalNet {
                             if(yy >= 0 && yy < inputHeight){
                                 tempDelta[f *  inputChannels * inputWidth * inputHeight +
                                             ch * inputWidth * inputHeight + xx * inputHeight + yy] += 
+                                        d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+/*
                                         d * oldfilter[f * inputChannels * filterSize * filterSize + 
                                             ch * filterSize * filterSize + i * filterSize + j];
+                                        */
                                 filter[f * inputChannels * filterSize * filterSize + 
                                                 ch * filterSize * filterSize + i * filterSize + j] += 
                                         d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
@@ -638,7 +645,7 @@ public class ConvolutionalNet {
         double[] backword(double[] input, double[] delta, ActivationFunction act){
             if(useGpu){
                 // GPUバージョン
-                double[] newDelta = convolutionBackwordDeltaKernel.backword(delta, result, 
+                double[] newDelta = convolutionBackwordDeltaKernel.backword(input, delta, result, 
                         inputChannels, inputWidth, inputHeight, filter,
                         outputChannels, outputWidth, outputHeight, filterSize, stride, true);
                 convolutionBackwordFilterKernel.backword(delta, result, input, 
@@ -932,6 +939,8 @@ public class ConvolutionalNet {
 			this.localEp = localEp;
             dropout = IntStream.generate(() -> 1).limit(out).toArray();
             this.dropoutRate = dropoutRate;
+            this.weight = weight;
+            this.bias = bias;
         }
         
         public void prepareDropout(){
@@ -961,7 +970,7 @@ public class ConvolutionalNet {
                         continue;
                     }
                     double d = act.diff(result[j]) * delta[j];
-                    newDelta[i] += d * oldweight[i][j];
+                    newDelta[i] += d * in[i];//oldweight[i][j];
                     weight[i][j] += d * localEp * in[i];
                     
                 }
@@ -980,7 +989,8 @@ public class ConvolutionalNet {
         JFrame f = createFrame();
         f.setVisible(true);
         
-        Path dir = Paths.get("/Users/FKST20197/Desktop/sampleimg288");
+        //Path dir = Paths.get("/Users/FKST20197/Desktop/sampleimg288");
+        Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg288");
         List<String> categories = Files.list(dir)
                 .filter(p -> Files.isDirectory(p))
                 .map(p -> p.getFileName().toString())

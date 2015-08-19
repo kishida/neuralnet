@@ -44,11 +44,11 @@ public class KernelBench {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
             fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
             
-            bdKernel.backword(delta2, result2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
+            bdKernel.backword(input2, delta2, result2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
             bfKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
             bbKernel.backwordBias(delta2, result2, 96, 16, 16, bias2, true);
             
-            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bdKernel.backword(input, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
             bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
             bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
         });
@@ -66,12 +66,12 @@ public class KernelBench {
         bench("1st filter cpu", () ->
             bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, false));
         
-        bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
-        bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+        bdKernel.backword(input, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
+        bdKernel.backword(input, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
         bench("1st delta gpu", () ->
-            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true));
+            bdKernel.backword(input, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true));
         bench("1st delta cpu", () ->
-            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false));
+            bdKernel.backword(input, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false));
         
         bbKernel.backwordBias(delta, result, 48, 128, 128, bias, false);
         bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
@@ -81,12 +81,12 @@ public class KernelBench {
             bbKernel.backwordBias(delta, result, 48, 128, 128, bias, false));
         
         bench("1st delta filter bias gpu", () ->{
-            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bdKernel.backword(input, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
             bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
             bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
         });
         bench("1st delta filter bias cpu", () ->{
-            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
+            bdKernel.backword(input, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
             bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
             bbKernel.backwordBias(delta, result, 48, 128, 128, bias, false);
         });
@@ -125,11 +125,11 @@ public class KernelBench {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
             fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
             
-            bdKernel.backword(delta2, result2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
+            bdKernel.backword(input2, delta2, result2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
             bfKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, true);
             bbKernel.backwordBias(delta2, result2, 96, 16, 16, bias2, true);
             
-            bdKernel.backword(delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
+            bdKernel.backword(input2, delta, result, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
             bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, true);
             bbKernel.backwordBias(delta, result, 48, 128, 128, bias, true);
         });

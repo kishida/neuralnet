@@ -369,10 +369,10 @@ public class ConvolutionalNet {
         }
         double[] input;
         double[] result;
-        int inputChannels;
+        //int inputChannels;
         int inputWidth;
         int inputHeight;
-        double[] filter;
+        //double[] filter;
         int outputChannels;
         int outputWidth;
         int outputHeight;
@@ -385,10 +385,10 @@ public class ConvolutionalNet {
                 boolean useGpu){
             this.input = input;
             this.delta = delta;
-            this.inputChannels = inputChannels;
+            //this.inputChannels = inputChannels;
             this.inputWidth = inputWidth;
             this.inputHeight = inputHeight;
-            this.filter = filter;
+            //this.filter = filter;
             this.outputChannels = outputChannels;
             this.outputWidth = outputWidth;
             this.outputHeight = outputHeight;
@@ -398,7 +398,7 @@ public class ConvolutionalNet {
             this.newDelta = new double[inputChannels * inputWidth * inputHeight];
             
             if(useGpu){
-                put(filter);
+                //put(filter);
                 put(delta);
                 put(result);
                 execute( inputChannels * inputWidth * inputHeight);
@@ -959,9 +959,10 @@ public class ConvolutionalNet {
             return result;
         }
         public double[] backward(double[] in, double[] delta, ActivationFunction act){
+			/*
             double[][] oldweight = Arrays.stream(weight).parallel()
                     .map(row -> Arrays.copyOf(row, row.length))
-                    .toArray(double[][]::new);
+                    .toArray(double[][]::new);*/
             double[] newDelta = new double[in.length];
             
             IntStream.range(0, in.length).parallel().forEach(i -> {

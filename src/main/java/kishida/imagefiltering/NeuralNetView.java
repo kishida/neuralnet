@@ -5,8 +5,10 @@
  */
 package kishida.imagefiltering;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.EventQueue;
+import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.GridLayout;
 import java.awt.Image;
@@ -16,23 +18,24 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import static kishida.imagefiltering.ConvolutionalNet.random;
+import javax.swing.JPanel;
 
 /**
  *
  * @author kishida
  */
 public class NeuralNetView {
-
+	static Random random = new Random(1234);
     public static void main(String[] args) {
-        System.out.println("aa");
         new NeuralNetView("ニューラルネット");
     }
 
@@ -120,6 +123,7 @@ public class NeuralNetView {
             return 1 / (1 + Math.exp(-d));
         }
 
+		@Override
         public int trial(double[] data) {
             double[] pattern = new double[data.length + 1];
             for (int i = 0; i < data.length; ++i) {
@@ -192,60 +196,77 @@ public class NeuralNetView {
     }
 
     LearningMachine createLearningMachine() {
-        return new NeuralNet();
+        return new OldNeuralNet();
     }
-
+	JLabel lblCounter;
     public NeuralNetView(String title) {
         JFrame f = new JFrame(title);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setSize(420, 300);
-        f.setLayout(new GridLayout(1, 2));
+		JPanel center = new JPanel(new GridLayout(1, 2));
+		f.add(BorderLayout.CENTER, center);
+
+		JPanel bottom = new JPanel(new FlowLayout());
+		f.add(BorderLayout.SOUTH, bottom);
+        lblCounter = new JLabel("Waiting");
+		lblCounter.setHorizontalAlignment(JLabel.CENTER);
+		bottom.add(BorderLayout.SOUTH, lblCounter);
 
         //線形分離可能
         double[] linear1X = {0.15, 0.3, 0.35, 0.4, 0.55};
         double[] linear1Y = {0.3, 0.6, 0.25, 0.5, 0.4};
         double[] linear2X = {0.4, 0.7, 0.7, 0.85, 0.9};
         double[] linear2Y = {0.85, 0.9, 0.8, 0.7, 0.6};
-        f.add(lblLinear = createLabel("線形分離可能"));
+        center.add(lblLinear = createLabel("線形分離可能"));
         //線形分離不可能
         double[] nonlinear1X = {0.15, 0.45, 0.6, 0.3, 0.75, 0.9};
         double[] nonlinear1Y = {0.5, 0.85, 0.75, 0.75, 0.7, 0.55};
         double[] nonlinear2X = {0.2, 0.55, 0.4, 0.6, 0.8, 0.85};
         double[] nonlinear2Y = {0.3, 0.6, 0.55, 0.4, 0.55, 0.2};
-        f.add(lblNonlinear = createLabel("線形分離不可能"));
+        center.add(lblNonlinear = createLabel("線形分離不可能"));
 
+		JButton btn = new JButton("Start");
+		bottom.add(btn);
         f.setVisible(true);
 
-        new Thread(() -> {
-            LearningMachine lmLinear = createLearningMachine();
-            LearningMachine lmNonlinear = createLearningMachine();
-            //学習
-            List<Param> paramsLinear = Stream.concat(
-                    IntStream.range(0, linear1X.length).mapToObj(i -> new Param(-1, linear1X[i], linear1Y[i])),
-                    IntStream.range(0, linear2X.length).mapToObj(i -> new Param(1, linear2X[i], linear2Y[i]))
-            ).collect(Collectors.toList());
-            Collections.shuffle(paramsLinear);
-            List<Param> paramsNonLinear = Stream.concat(
-                    IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(-1, nonlinear1X[i], nonlinear1Y[i])),
-                    IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(1, nonlinear2X[i], nonlinear2Y[i]))
-            ).collect(Collectors.toList());
-            Collections.shuffle(paramsNonLinear);
-            for (int i = 0; i < 10000; ++i) {
-                paramsLinear.stream().forEach(p -> lmLinear.learn(p.supervise, new double[]{p.x, p.y}));
-                Image imgLinear = createGraphImg(lmLinear, linear1X, linear1Y, linear2X, linear2Y);
+		btn.addActionListener(ae -> {
+			btn.setEnabled(false);
+			new Thread(() -> {
+				LearningMachine lmLinear = createLearningMachine();
+				LearningMachine lmNonlinear = createLearningMachine();
+				//学習
+				List<Param> paramsLinear = Stream.concat(
+						IntStream.range(0, linear1X.length).mapToObj(i -> new Param(-1, linear1X[i], linear1Y[i])),
+						IntStream.range(0, linear2X.length).mapToObj(i -> new Param(1, linear2X[i], linear2Y[i]))
+				).collect(Collectors.toList());
+				Collections.shuffle(paramsLinear);
+				List<Param> paramsNonLinear = Stream.concat(
+						IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(-1, nonlinear1X[i], nonlinear1Y[i])),
+						IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(1, nonlinear2X[i], nonlinear2Y[i]))
+				).collect(Collectors.toList());
+				Collections.shuffle(paramsNonLinear);
+				for (int i = 0; i < 5000; ++i) {
+					paramsLinear.stream().forEach(p -> lmLinear.learn(p.supervise, new double[]{p.x, p.y}));
+					Image imgLinear = createGraphImg(lmLinear, linear1X, linear1Y, linear2X, linear2Y);
 
-                paramsNonLinear.stream().forEach(p -> lmNonlinear.learn(p.supervise, new double[]{p.x, p.y}));
-                Image imgNonlinear = createGraphImg(lmNonlinear, nonlinear1X, nonlinear1Y, nonlinear2X, nonlinear2Y);
+					paramsNonLinear.stream().forEach(p -> lmNonlinear.learn(p.supervise, new double[]{p.x, p.y}));
+					Image imgNonlinear = createGraphImg(lmNonlinear, nonlinear1X, nonlinear1Y, nonlinear2X, nonlinear2Y);
 
-                if (i % 10 == 0) {
-                    EventQueue.invokeLater(() -> {
-                        lblLinear.setIcon(new ImageIcon(imgLinear));
-                        lblNonlinear.setIcon(new ImageIcon(imgNonlinear));
-                    });
-                }
-            }
-            System.out.println("finish");
-        }).start();
+					if (i % 10 == 0) {
+						String strCount = String.valueOf(i);
+						EventQueue.invokeLater(() -> {
+							lblLinear.setIcon(new ImageIcon(imgLinear));
+							lblNonlinear.setIcon(new ImageIcon(imgNonlinear));
+							lblCounter.setText(strCount);
+						});
+					}
+				}
+				EventQueue.invokeLater(() -> {
+					lblCounter.setText("Finish");
+					btn.setEnabled(true);
+				});
+			}).start();
+		});
     }
 
     JLabel lblLinear;

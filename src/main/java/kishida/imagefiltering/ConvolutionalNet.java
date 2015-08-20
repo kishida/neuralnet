@@ -37,15 +37,18 @@ import javax.swing.JTabbedPane;
  * @author naoki
  */
 public class ConvolutionalNet {
-    static final double ep = 0.00001;
-    static Random random = new Random(1234);
-    static final boolean USE_GPU1 = true;
-    static final boolean USE_GPU2 = false;
-    static final int FILTER_1ST = 12;
-    static final int FILTER_2ND = 16;
-    static final int FILTER_1ST_SIZE = 11;
+    private static final double ep = 0.00001;
+    private static Random random = new Random(1234);
+    private static final boolean USE_GPU1 = true;
+    private static final boolean USE_GPU2 = false;
+    private static final int FILTER_1ST = 12;
+    private static final int FILTER_2ND = 16;
+    private static final int FULL_1ST = 32;
+    private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
+    private static final int FILTER_ROWS = 8;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
+    private static final int FILTER_COLS = 6;//FILTER_1ST / h;
 
     static class Img{
 
@@ -359,7 +362,8 @@ public class ConvolutionalNet {
                                 tempDelta += d * filter[f * inputChannels * filterSize * filterSize + 
                                             ch * filterSize * filterSize + i * filterSize + j];
                                 */
-                                tempDelta += d * input[chxxyy];
+                                tempDelta += d * input[chxxyy] * filter[f * inputChannels * filterSize * filterSize + 
+                                            ch * filterSize * filterSize + i * filterSize + j];
                             }
                         }
                     }
@@ -369,10 +373,10 @@ public class ConvolutionalNet {
         }
         double[] input;
         double[] result;
-        //int inputChannels;
+        int inputChannels;
         int inputWidth;
         int inputHeight;
-        //double[] filter;
+        double[] filter;
         int outputChannels;
         int outputWidth;
         int outputHeight;
@@ -385,10 +389,10 @@ public class ConvolutionalNet {
                 boolean useGpu){
             this.input = input;
             this.delta = delta;
-            //this.inputChannels = inputChannels;
+            this.inputChannels = inputChannels;
             this.inputWidth = inputWidth;
             this.inputHeight = inputHeight;
-            //this.filter = filter;
+            this.filter = filter;
             this.outputChannels = outputChannels;
             this.outputWidth = outputWidth;
             this.outputHeight = outputHeight;
@@ -398,7 +402,7 @@ public class ConvolutionalNet {
             this.newDelta = new double[inputChannels * inputWidth * inputHeight];
             
             if(useGpu){
-                //put(filter);
+                put(filter);
                 put(delta);
                 put(result);
                 execute( inputChannels * inputWidth * inputHeight);
@@ -527,7 +531,9 @@ public class ConvolutionalNet {
                             if(yy >= 0 && yy < inputHeight){
                                 tempDelta[f *  inputChannels * inputWidth * inputHeight +
                                             ch * inputWidth * inputHeight + xx * inputHeight + yy] += 
-                                        d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                                        d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy]
+                                         * oldfilter[f * inputChannels * filterSize * filterSize + 
+                                            ch * filterSize * filterSize + i * filterSize + j];
 /*
                                         d * oldfilter[f * inputChannels * filterSize * filterSize + 
                                             ch * filterSize * filterSize + i * filterSize + j];
@@ -923,7 +929,7 @@ public class ConvolutionalNet {
         int[] dropout;
         String name;
         double dropoutRate = 1;
-		double localEp;
+        double localEp;
         public FullyConnect(String name, int in, int out, double dropoutRate) {
             this(name, in, out, Stream.generate(() ->
                     DoubleStream.generate(() -> (random.nextDouble() * 1.5 - .5) / in).limit(out).toArray()
@@ -934,9 +940,9 @@ public class ConvolutionalNet {
         public FullyConnect(String name, int in, int out, double[][] weight, double[] bias, double dropoutRate, double localEp) {
             this.name = name;
             this.out = out;
-			this.weight = weight;
-			this.bias = bias;
-			this.localEp = localEp;
+            this.weight = weight;
+            this.bias = bias;
+            this.localEp = localEp;
             dropout = IntStream.generate(() -> 1).limit(out).toArray();
             this.dropoutRate = dropoutRate;
             this.weight = weight;
@@ -949,7 +955,8 @@ public class ConvolutionalNet {
         
         public double[] forward(double[] in){
             result = new double[out];
-            IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
+            IntStream.range(0, out).parallel()
+                    .filter(j -> dropout[j] == 1).forEach(j -> {
                 for(int i = 0; i < in.length; ++i){
                     result[j] += in[i] * weight[i][j];
                 }
@@ -959,10 +966,10 @@ public class ConvolutionalNet {
             return result;
         }
         public double[] backward(double[] in, double[] delta, ActivationFunction act){
-			/*
+			
             double[][] oldweight = Arrays.stream(weight).parallel()
                     .map(row -> Arrays.copyOf(row, row.length))
-                    .toArray(double[][]::new);*/
+                    .toArray(double[][]::new);
             double[] newDelta = new double[in.length];
             
             IntStream.range(0, in.length).parallel().forEach(i -> {
@@ -970,13 +977,14 @@ public class ConvolutionalNet {
                     if(dropout[j] != 1){
                         continue;
                     }
-                    double d = act.diff(result[j]) * delta[j];
-                    newDelta[i] += d * in[i];//oldweight[i][j];
-                    weight[i][j] += d * localEp * in[i];
-                    
+                double d = act.diff(result[j]) * delta[j];
+                    newDelta[i] += d * in[i] * oldweight[i][j];
+                    weight[i][j] += d * in[i] * localEp;
                 }
             });
-            IntStream.range(0, out).parallel().forEach(j -> {
+            IntStream.range(0, out).parallel()
+                    .filter(j -> dropout[j] == 1)
+                    .forEach(j -> {
                 bias[j] += act.diff(result[j]) * delta[j] * localEp;
             });
             return newDelta;
@@ -987,8 +995,8 @@ public class ConvolutionalNet {
     static LinkedList<Integer> rateData = new LinkedList<>();
     
     public static void main(String[] args) throws IOException {
-        
-        Path dir = Paths.get(args[0]);
+        String def = "C:\\Users\\naoki\\Desktop\\sampleimg288";
+        Path dir = Paths.get(args.length > 0 ? args[0] : def);
         List<String> categories = Files.list(dir)
                 .filter(p -> Files.isDirectory(p))
                 .map(p -> p.getFileName().toString())
@@ -1017,9 +1025,9 @@ public class ConvolutionalNet {
         layers.add(norm2);
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", FILTER_2ND * 256 / 32 * 256 / 32, 32, 0.5);
+        FullyConnect fc1 = new FullyConnect("fc1", FILTER_2ND * 256 / 32 * 256 / 32, FULL_1ST, 0.5);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", 32, categories.size(), 1);
+        FullyConnect fc2 = new FullyConnect("fc2", FULL_1ST, categories.size(), 1);
         
         List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))
@@ -1136,7 +1144,7 @@ public class ConvolutionalNet {
             int left = i * width / data.length;
             int right = (i + 1) * width / data.length;
             int top = f.applyAsInt(data[i]);
-            g.fillRect(left, Math.min(top, bottom), right - left - 1, Math.abs(bottom - top));
+            g.fillRect(left, Math.min(top, bottom), Math.max(1, right - left - 1), Math.abs(bottom - top));
         }
         g.dispose();
         return result;
@@ -1188,25 +1196,23 @@ public class ConvolutionalNet {
         northRight.add(lastResult);
         
         //中段
-        int h = 3;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
-        int w = 5;//FILTER_1ST / h;
         JTabbedPane tab = new JTabbedPane(JTabbedPane.RIGHT);
         f.add(tab);
         JPanel middle = new JPanel();
         tab.add("filter", middle);
-        middle.setLayout(new GridLayout(h, w));
+        middle.setLayout(new GridLayout(FILTER_ROWS, FILTER_COLS));
         Arrays.stream(filtersLabel).forEach(middle::add);
         JPanel filtered = new JPanel();
         tab.add("filtered", filtered);
-        filtered.setLayout(new GridLayout(h, w));
+        filtered.setLayout(new GridLayout(FILTER_ROWS, FILTER_COLS));
         Arrays.stream(filteredLabel).forEach(filtered::add);
         JPanel pooled = new JPanel();
         tab.add("pooled", pooled);
-        pooled.setLayout(new GridLayout(h, w));
+        pooled.setLayout(new GridLayout(FILTER_ROWS, FILTER_COLS));
         Arrays.stream(pooledLabel).forEach(pooled::add);
         JPanel normed = new JPanel();
         tab.add("normed", normed);
-        normed.setLayout(new GridLayout(h, w));
+        normed.setLayout(new GridLayout(FILTER_ROWS, FILTER_COLS));
         Arrays.stream(normedLabel).forEach(normed::add);
         
         //下段
@@ -1234,23 +1240,15 @@ public class ConvolutionalNet {
             layers.get(i).preLayer = layers.get(i - 1);
             layers.get(i).forward();
         }
-        /*
-        //一段目のフィルタをかける
-        double[][][] filtered1 = conv1.forward(readData);
-        //プーリング
-        double[][][] pooled1 = pool1.forward(filtered1);
-        double[][][] pooled1norm = norm1.forward(pooled1);
-        //二段目のフィルタをかける
-        double[][][] filtered2 = conv2.forward(pooled1norm);
-        //プーリング
-        double[][][] pooled2 = pool2.forward(filtered2);
-        double[][][] pooled2norm = norm2.forward(pooled2);
-        */
+
         double[] flattenPooled2 = norm2.getResult();
         //全結合一段
         fc1.prepareDropout();
         double[] fc1out = fc1.forward(flattenPooled2);
         double[] fc1outRe = Arrays.stream(fc1out).map(d -> d > 0 ? d : 0).toArray();
+        for(int i = 0; i < fc1.result.length; ++i){
+            fc1.result[i] = fc1outRe[i];
+        }
         //全結合二段
         double[] fc2out = fc2.forward(fc1outRe);
         //System.out.println(Arrays.stream(fc2out).mapToObj(d -> String.format("%.3f", d)).collect(Collectors.joining(",")));

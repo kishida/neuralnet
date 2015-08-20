@@ -34,7 +34,13 @@ import javax.swing.JPanel;
  * @author kishida
  */
 public class NeuralNetView {
-	static Random random = new Random(1234);
+
+    static Random random = new Random();
+
+    LearningMachine createLearningMachine() {
+        return new NeuralNet();
+    }
+    
     public static void main(String[] args) {
         new NeuralNetView("ニューラルネット");
     }
@@ -42,11 +48,9 @@ public class NeuralNetView {
     public interface LearningMachine {
 
         //学習
-
         void learn(int cls, double[] data);
 
         //評価
-
         int trial(double[] data);
     }
 
@@ -54,7 +58,7 @@ public class NeuralNetView {
 
         List<Map.Entry<Integer, double[]>> patterns = new ArrayList<>();
         double[][] w;//入力→中間層の係数
-        double[] hidden;//中間層→出力の係数
+        double[] midweight;//中間層→出力の係数
         int dim = 2;//入力パラメータ数
         int hiddendim = 3;//中間層の数+1
 
@@ -65,9 +69,9 @@ public class NeuralNetView {
                     w[i][j] = random.nextDouble() * 2 - 1;
                 }
             }
-            hidden = new double[hiddendim];
+            midweight = new double[hiddendim];
             for (int i = 0; i < hiddendim; ++i) {
-                hidden[i] = random.nextDouble() * 2 - 1;
+                midweight[i] = random.nextDouble() * 2 - 1;
             }
 
         }
@@ -75,45 +79,42 @@ public class NeuralNetView {
         @Override
         public void learn(int cls, double[] data) {
 
-            int yi = cls == 1 ? 1 : 0;
+            int pcls = cls == 1 ? 1 : 0;
 
-            final double k = .3;//学習係数
+            final double localEp = .3;//学習係数
             double[] pattern = DoubleStream.concat(
                     DoubleStream.of(1),
                     Arrays.stream(data)).toArray();
 
-            int pcls = yi;//正解
-            double[] hiddenvalue = new double[hiddendim];//中間層の出力値
+            double[] middleout = new double[hiddendim];//中間層の出力値
             //入力層→中間層
             for (int j = 0; j < w.length; ++j) {
                 double in = 0;
                 for (int i = 0; i < pattern.length; ++i) {
                     in += pattern[i] * w[j][i];
                 }
-                hiddenvalue[j + 1] = sigmoid(in);
+                middleout[j + 1] = sigmoid(in);
             }
-            hiddenvalue[0] = 1;
+            middleout[0] = 1;
             //中間層→出力層
             double out = 0;//出力
-            for (int i = 0; i < hiddenvalue.length; ++i) {
-                out += hidden[i] * hiddenvalue[i];
+            for (int i = 0; i < middleout.length; ++i) {
+                out += midweight[i] * middleout[i];
             }
             out = sigmoid(out);
             //出力層→中間層
-            double p = (pcls - out) * out * (1 - out);// 2015/8/5追記、たぶんこの計算違います。
-            // ループの中で(pcls - out) * hiddenvalue[i] * (1 - hiddenvalue[i])を計算する必要がありそう
-            double[] e = new double[hiddendim];//中間層の補正値
-            double[] oldhidden = hidden.clone();//補正前の係数
+            double d = (pcls - out) * out * (1 - out);
+            double[] newDelta = new double[hiddendim];//中間層の補正値
+            double[] oldhidden = midweight.clone();//補正前の係数
             for (int i = 0; i < hiddendim; ++i) {
-                e[i] = p * hiddenvalue[i];
-                hidden[i] += e[i] * k;
+                newDelta[i] = d * middleout[i];
+                midweight[i] += newDelta[i] * localEp;
             }
             //中間層→入力層
             for (int i = 1; i < hiddendim; ++i) {
-                // 2015/8/5追記 ここもたぶん計算違う
-                double ek = e[i] * oldhidden[i] * hiddenvalue[i] * (1 - hiddenvalue[i]);
+                double ek = newDelta[i] * oldhidden[i] * middleout[i] * (1 - middleout[i]);
                 for (int j = 0; j < dim + 1; ++j) {
-                    w[i - 1][j] += pattern[j] * ek * k;
+                    w[i - 1][j] += pattern[j] * ek * localEp;
                 }
             }
 
@@ -123,7 +124,7 @@ public class NeuralNetView {
             return 1 / (1 + Math.exp(-d));
         }
 
-		@Override
+        @Override
         public int trial(double[] data) {
             double[] pattern = new double[data.length + 1];
             for (int i = 0; i < data.length; ++i) {
@@ -144,7 +145,7 @@ public class NeuralNetView {
             //中間層→出力層
             double out = 0;
             for (int i = 0; i < hiddendata.length; ++i) {
-                out += hiddendata[i] * hidden[i];
+                out += hiddendata[i] * midweight[i];
             }
             return (sigmoid(out) > .5) ? 1 : -1;
         }
@@ -175,9 +176,10 @@ public class NeuralNetView {
         public void learn(int cls, double[] data) {
             double p = cls == 1 ? 1 : 0;
             double[] mid = fc1.forward(data);
-            double[] appmid = Arrays.stream(mid).map(d -> act.apply(d)).toArray();
+            double[] appmid = Arrays.stream(mid).map(act::apply).toArray();
+            fc1.result = appmid;
             double[] result = fc2.forward(appmid);
-            double[] appresult = Arrays.stream(result).map(d -> act.apply(d)).toArray();
+            double[] appresult = Arrays.stream(result).map(act::apply).toArray();
             fc2.result = appresult;
             double[] delta = Arrays.stream(appresult).map(d -> p - d).toArray();
             double[] backmid = fc2.backward(appmid, delta, act);
@@ -187,30 +189,28 @@ public class NeuralNetView {
         @Override
         public int trial(double[] data) {
             double[] mid = fc1.forward(data);
-            double[] appmid = Arrays.stream(mid).map(d -> act.apply(d)).toArray();
+            double[] appmid = Arrays.stream(mid).map(act::apply).toArray();
             double[] result = fc2.forward(appmid);
-            double[] appresult = Arrays.stream(result).map(d -> act.apply(d)).toArray();
+            double[] appresult = Arrays.stream(result).map(act::apply).toArray();
             return appresult[0] > .5 ? 1 : 0;
         }
 
     }
 
-    LearningMachine createLearningMachine() {
-        return new OldNeuralNet();
-    }
-	JLabel lblCounter;
+    JLabel lblCounter;
+
     public NeuralNetView(String title) {
         JFrame f = new JFrame(title);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setSize(420, 300);
-		JPanel center = new JPanel(new GridLayout(1, 2));
-		f.add(BorderLayout.CENTER, center);
+        JPanel center = new JPanel(new GridLayout(1, 2));
+        f.add(BorderLayout.CENTER, center);
 
-		JPanel bottom = new JPanel(new FlowLayout());
-		f.add(BorderLayout.SOUTH, bottom);
+        JPanel bottom = new JPanel(new FlowLayout());
+        f.add(BorderLayout.SOUTH, bottom);
         lblCounter = new JLabel("Waiting");
-		lblCounter.setHorizontalAlignment(JLabel.CENTER);
-		bottom.add(BorderLayout.SOUTH, lblCounter);
+        lblCounter.setHorizontalAlignment(JLabel.CENTER);
+        bottom.add(BorderLayout.SOUTH, lblCounter);
 
         //線形分離可能
         double[] linear1X = {0.15, 0.3, 0.35, 0.4, 0.55};
@@ -225,48 +225,48 @@ public class NeuralNetView {
         double[] nonlinear2Y = {0.3, 0.6, 0.55, 0.4, 0.55, 0.2};
         center.add(lblNonlinear = createLabel("線形分離不可能"));
 
-		JButton btn = new JButton("Start");
-		bottom.add(btn);
+        JButton btn = new JButton("Start");
+        bottom.add(btn);
         f.setVisible(true);
 
-		btn.addActionListener(ae -> {
-			btn.setEnabled(false);
-			new Thread(() -> {
-				LearningMachine lmLinear = createLearningMachine();
-				LearningMachine lmNonlinear = createLearningMachine();
-				//学習
-				List<Param> paramsLinear = Stream.concat(
-						IntStream.range(0, linear1X.length).mapToObj(i -> new Param(-1, linear1X[i], linear1Y[i])),
-						IntStream.range(0, linear2X.length).mapToObj(i -> new Param(1, linear2X[i], linear2Y[i]))
-				).collect(Collectors.toList());
-				Collections.shuffle(paramsLinear);
-				List<Param> paramsNonLinear = Stream.concat(
-						IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(-1, nonlinear1X[i], nonlinear1Y[i])),
-						IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(1, nonlinear2X[i], nonlinear2Y[i]))
-				).collect(Collectors.toList());
-				Collections.shuffle(paramsNonLinear);
-				for (int i = 0; i < 5000; ++i) {
-					paramsLinear.stream().forEach(p -> lmLinear.learn(p.supervise, new double[]{p.x, p.y}));
-					Image imgLinear = createGraphImg(lmLinear, linear1X, linear1Y, linear2X, linear2Y);
+        btn.addActionListener(ae -> {
+            btn.setEnabled(false);
+            new Thread(() -> {
+                LearningMachine lmLinear = createLearningMachine();
+                LearningMachine lmNonlinear = createLearningMachine();
+                //学習
+                List<Param> paramsLinear = Stream.concat(
+                        IntStream.range(0, linear1X.length).mapToObj(i -> new Param(-1, linear1X[i], linear1Y[i])),
+                        IntStream.range(0, linear2X.length).mapToObj(i -> new Param(1, linear2X[i], linear2Y[i]))
+                ).collect(Collectors.toList());
+                Collections.shuffle(paramsLinear);
+                List<Param> paramsNonLinear = Stream.concat(
+                        IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(-1, nonlinear1X[i], nonlinear1Y[i])),
+                        IntStream.range(0, nonlinear1X.length).mapToObj(i -> new Param(1, nonlinear2X[i], nonlinear2Y[i]))
+                ).collect(Collectors.toList());
+                Collections.shuffle(paramsNonLinear);
+                for (int i = 0; i < 5000; ++i) {
+                    paramsLinear.stream().forEach(p -> lmLinear.learn(p.supervise, new double[]{p.x, p.y}));
+                    Image imgLinear = createGraphImg(lmLinear, linear1X, linear1Y, linear2X, linear2Y);
 
-					paramsNonLinear.stream().forEach(p -> lmNonlinear.learn(p.supervise, new double[]{p.x, p.y}));
-					Image imgNonlinear = createGraphImg(lmNonlinear, nonlinear1X, nonlinear1Y, nonlinear2X, nonlinear2Y);
+                    paramsNonLinear.stream().forEach(p -> lmNonlinear.learn(p.supervise, new double[]{p.x, p.y}));
+                    Image imgNonlinear = createGraphImg(lmNonlinear, nonlinear1X, nonlinear1Y, nonlinear2X, nonlinear2Y);
 
-					if (i % 10 == 0) {
-						String strCount = String.valueOf(i);
-						EventQueue.invokeLater(() -> {
-							lblLinear.setIcon(new ImageIcon(imgLinear));
-							lblNonlinear.setIcon(new ImageIcon(imgNonlinear));
-							lblCounter.setText(strCount);
-						});
-					}
-				}
-				EventQueue.invokeLater(() -> {
-					lblCounter.setText("Finish");
-					btn.setEnabled(true);
-				});
-			}).start();
-		});
+                    if (i % 10 == 0) {
+                        String strCount = String.valueOf(i);
+                        EventQueue.invokeLater(() -> {
+                            lblLinear.setIcon(new ImageIcon(imgLinear));
+                            lblNonlinear.setIcon(new ImageIcon(imgNonlinear));
+                            lblCounter.setText(strCount);
+                        });
+                    }
+                }
+                EventQueue.invokeLater(() -> {
+                    lblCounter.setText("Finish");
+                    btn.setEnabled(true);
+                });
+            }).start();
+        });
     }
 
     JLabel lblLinear;

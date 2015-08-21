@@ -37,7 +37,7 @@ public class NeuralNetView {
 
     static Random random = new Random();
 
-    LearningMachine createLearningMachine() {
+    private LearningMachine createLearningMachine() {
         return new NeuralNet();
     }
     
@@ -163,36 +163,30 @@ public class NeuralNetView {
                     -> DoubleStream.generate(() -> (random.nextDouble() * 2 - 1)).limit(2).toArray()
             ).limit(2).toArray(double[][]::new);
             double[] bias = DoubleStream.generate(() -> random.nextDouble() * 2 - 1).limit(2).toArray();
-            fc1 = new ConvolutionalNet.FullyConnect("fc1", 2, 2, wight, bias, 1, .3);
+            fc1 = new ConvolutionalNet.FullyConnect("fc1", 2, 2, wight, bias, 1, .3, new ConvolutionalNet.LogisticFunction());
 
             double[][] wight2 = Stream.generate(()
                     -> DoubleStream.generate(() -> (random.nextDouble() * 2 - 1)).limit(1).toArray()
             ).limit(2).toArray(double[][]::new);
             double[] bias2 = DoubleStream.generate(() -> random.nextDouble() * 2 - 1).limit(1).toArray();
-            fc2 = new ConvolutionalNet.FullyConnect("fc2", 2, 1, wight2, bias2, 1, .3);
+            fc2 = new ConvolutionalNet.FullyConnect("fc2", 2, 1, wight2, bias2, 1, .3, new ConvolutionalNet.LogisticFunction());
         }
 
         @Override
         public void learn(int cls, double[] data) {
             double p = cls == 1 ? 1 : 0;
             double[] mid = fc1.forward(data);
-            double[] appmid = Arrays.stream(mid).map(act::apply).toArray();
-            fc1.result = appmid;
-            double[] result = fc2.forward(appmid);
-            double[] appresult = Arrays.stream(result).map(act::apply).toArray();
-            fc2.result = appresult;
-            double[] delta = Arrays.stream(appresult).map(d -> p - d).toArray();
-            double[] backmid = fc2.backward(appmid, delta, act);
-            fc1.backward(data, backmid, act);
+            double[] result = fc2.forward(mid);
+            double[] delta = Arrays.stream(result).map(d -> p - d).toArray();
+            double[] backmid = fc2.backward(fc1.result, delta);
+            fc1.backward(data, backmid);
         }
 
         @Override
         public int trial(double[] data) {
             double[] mid = fc1.forward(data);
-            double[] appmid = Arrays.stream(mid).map(act::apply).toArray();
-            double[] result = fc2.forward(appmid);
-            double[] appresult = Arrays.stream(result).map(act::apply).toArray();
-            return appresult[0] > .5 ? 1 : 0;
+            double[] result = fc2.forward(mid);
+            return result[0] > .5 ? 1 : 0;
         }
 
     }
@@ -272,7 +266,7 @@ public class NeuralNetView {
     JLabel lblLinear;
     JLabel lblNonlinear;
 
-    JLabel createLabel(String title) {
+    private JLabel createLabel(String title) {
         JLabel l = new JLabel(title);
         l.setVerticalTextPosition(JLabel.BOTTOM);
         l.setHorizontalTextPosition(JLabel.CENTER);

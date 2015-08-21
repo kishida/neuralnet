@@ -55,8 +55,8 @@ public class KernelBench {
         bench("complex gpu", () -> {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
             fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
-            bKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
-            bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true);
+            bKernel.backward(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, true);
+            bKernel.backward(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, true);
         });        
         
         bfKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, false);
@@ -92,9 +92,9 @@ public class KernelBench {
         });
         
         fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, false);
-        bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, false);
+        bKernel.backward(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, false);
         fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
-        bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true);
+        bKernel.backward(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, true);
         
         
         
@@ -112,14 +112,14 @@ public class KernelBench {
         
         
         bench("1st back gpu", () -> 
-            bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true));
+            bKernel.backward(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, true));
         bench("1st back cpu", () -> 
-            bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, false));
+            bKernel.backward(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, false));
 
         bench("2st back gpu", () -> 
-            bKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true));
+            bKernel.backward(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, true));
         bench("2st back cpu", () -> 
-            bKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, false));
+            bKernel.backward(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, false));
         
         bench("complex optimize gpu", () -> {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
@@ -136,14 +136,14 @@ public class KernelBench {
         bench("complex gpu", () -> {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, true);
             fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
-            bKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, true);
-            bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, true);
+            bKernel.backward(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, true);
+            bKernel.backward(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, true);
         });
         bench("complex cpu", () -> {
             fKernel.forward(input, 3, 256, 256, filter, 48, 256 / 2, 256 / 2, 11, 2, bias, act, false);
             fKernel.forward(input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, false);
-            bKernel.backword(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, act, false);
-            bKernel.backword(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, act, false);
+            bKernel.backward(delta2, result2, input2, 48, 32, 32, filter2, 96, 16, 16, 5, 2, bias2, false);
+            bKernel.backward(delta, result, input, 3, 256, 256, filter, 48, 128, 128, 11, 2, bias, false);
         });
     }
     

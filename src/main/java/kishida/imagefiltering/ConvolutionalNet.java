@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.DoubleSummaryStatistics;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.function.DoubleToIntFunction;
 import java.util.stream.Collectors;
@@ -925,7 +926,6 @@ public class ConvolutionalNet {
         double[][] weight;
         double[] bias;
         int out;
-        double[] result;
         int[] dropout;
         double dropoutRate = 1;
         double localEp;
@@ -1040,8 +1040,10 @@ public class ConvolutionalNet {
         
         //全結合1
         FullyConnect fc1 = new FullyConnect("fc1", pre, FULL_1ST, 0.5, new RetifierdLinear());
+        layers.add(fc1);
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", fc1, categories.size(), 1, new SoftMaxFunction());
+        layers.add(fc2);
         
         List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))
@@ -1073,7 +1075,7 @@ public class ConvolutionalNet {
             BufferedImage moved = move(resized, 256, 256, img.x * 16, img.y * 16);
             double[] readData = normalize(imageToArray(moved));
 
-            double[] output = forward(layers, fc1, fc2, readData, correctData);
+            double[] output = forward(layers, readData, correctData);
             //元画像の表示
             
             org.setIcon(new ImageIcon(resized));
@@ -1248,34 +1250,21 @@ public class ConvolutionalNet {
         return f;
     }
     
-    static double[] forward(List<NeuralLayer> layers, FullyConnect fc1, FullyConnect fc2,
-            double[] readData, double[] correctData){
-        NeuralLayer norm2 = layers.get(layers.size() - 1);
+    static double[] forward(List<NeuralLayer> layers, double[] readData, double[] correctData){
         layers.get(0).result = readData;
         for(int i = 1; i < layers.size(); ++i){
             layers.get(i).preLayer = layers.get(i - 1);
             layers.get(i).forward();
         }
-
-        double[] flattenPooled2 = norm2.getResult();
-        //全結合一段
-        fc1.prepareDropout();
-        double[] fc1out = fc1.forward(flattenPooled2);
-        //全結合二段
-        double[] output = fc2.forward(fc1out);
-
-        //全結合二段の逆伝播
+        double[] output = layers.get(layers.size() - 1).getResult();
+        //誤差を求める
         double[] delta = IntStream.range(0, output.length)
                 .mapToDouble(idx -> correctData[idx] - output[idx])
                 //.map(d -> -d)
                 .toArray();
-        double[] deltaFc2 = fc2.backward(fc1out, delta);
-        //全結合一段の逆伝播
-        double[] deltaFc1 = fc1.backward(flattenPooled2, deltaFc2);
-        
-        //プーリングの逆伝播
+        //逆伝播
         for(int i = layers.size() - 1; i >= 1; --i){
-            deltaFc1 = layers.get(i).backward(deltaFc1);
+            delta = layers.get(i).backward(delta);
         }
 
         return output;

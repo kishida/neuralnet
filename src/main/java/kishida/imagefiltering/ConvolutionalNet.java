@@ -189,7 +189,18 @@ public class ConvolutionalNet {
             this.outputWidth = outputWidth;
             this.outputHeight = outputHeight;
         }
-        
+
+        public int getOutputChannels() {
+            return outputChannels;
+        }
+
+        public int getOutputWidth() {
+            return outputWidth;
+        }
+
+        public int getOutputHeight() {
+            return outputHeight;
+        }
     }
     
     static class InputFilter extends ImageNeuralLayer{
@@ -646,6 +657,11 @@ public class ConvolutionalNet {
         int stride;
         int filterSize;
         boolean useGpu;
+        
+        public ConvolutionLayer(String name, ImageNeuralLayer preLayer, int filterCount,  int size, int stride, boolean useGpu) {
+            this(name, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth, filterCount, size, stride, useGpu);
+            this.preLayer = preLayer;
+        }        
         public ConvolutionLayer(String name, int channel, int width, int height, int filterCount,  int size, int stride, boolean useGpu) {
             super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
             this.filter = random.doubles(size * size * channel * filterCount)
@@ -699,6 +715,10 @@ public class ConvolutionalNet {
         int size;
         int stride;
 
+        public MaxPoolingLayer(String name, int size, int stride, ImageNeuralLayer preLayer) {
+            this(name, size, stride, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputHeight);
+            this.preLayer = preLayer;
+        }
         public MaxPoolingLayer(String name, int size, int stride, int channels, int inputWidth, int inputHeight) {
             super(name, new LinearFunction(), channels, inputWidth, inputHeight, channels,
                     inputWidth / stride, inputHeight / stride);
@@ -874,6 +894,9 @@ public class ConvolutionalNet {
         int size;
         double threshold;
         boolean useGpu;
+        public NormalizeLayer(String name, int size, double threshold, ImageNeuralLayer preLayer, boolean useGpu) {
+            this(name, size, threshold, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputHeight, useGpu);
+        }
         public NormalizeLayer(String name, int size, double threshold, int channels, int width, int height, boolean useGpu) {
             super(name, new LinearFunction(), channels, width, height, channels, width, height);
             this.size = size;
@@ -906,6 +929,15 @@ public class ConvolutionalNet {
         int[] dropout;
         double dropoutRate = 1;
         double localEp;
+        
+        public FullyConnect(String name, ImageNeuralLayer preLayer, int out, double dropoutRate, ActivationFunction activation) {
+            this(name, preLayer.inputChannels * preLayer.inputWidth * preLayer.inputHeight, out, dropoutRate, activation);
+            this.preLayer = preLayer;
+        }
+        public FullyConnect(String name, FullyConnect preLayer, int out, double dropoutRate, ActivationFunction activation) {
+            this(name, preLayer.out, out, dropoutRate, activation);
+            this.preLayer = preLayer;
+        }
         public FullyConnect(String name, int in, int out, double dropoutRate, ActivationFunction activation) {
             this(name, in, out, Stream.generate(() ->
                     DoubleStream.generate(() -> (random.nextDouble() * 1.5 - .5) / in).limit(out).toArray()
@@ -991,24 +1023,25 @@ public class ConvolutionalNet {
         InputFilter input = new InputFilter(256, 256);
         layers.add(input);
         
+        ImageNeuralLayer pre = input;
         //一段目
-        layers.add(new ConvolutionLayer("conv1", 3, 256, 256, FILTER_1ST, FILTER_1ST_SIZE, 4, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, USE_GPU1));
         //一段目のプーリング
-        layers.add(new MaxPoolingLayer("pool1", 3, 2, FILTER_1ST, 256 / 4, 256 / 4));
+        layers.add(pre = new MaxPoolingLayer("pool1", 3, 2, pre));
         //一段目の正規化
-        layers.add(new NormalizeLayer("norm1", 5, .1, FILTER_1ST, 256 / 8, 256 / 8, USE_GPU1));
+        layers.add(pre = new NormalizeLayer("norm1", 5, .1, pre, USE_GPU1));
         //二段目
-        layers.add(new ConvolutionLayer("conv2", FILTER_1ST, 256 / 8, 256 / 8, FILTER_2ND, 5, 2, USE_GPU2));
+        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 2, USE_GPU2));
         //二段目のプーリング
-        layers.add(new MaxPoolingLayer("pool2", 3, 2, FILTER_2ND, 256 / 16, 256 / 16));
+        layers.add(pre = new MaxPoolingLayer("pool2", 3, 2, pre));
         
-        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, FILTER_2ND, 256 / 32, 256 / 32, USE_GPU2);
-        layers.add(norm2);
+        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, pre, USE_GPU2);
+        layers.add(pre = norm2);
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", FILTER_2ND * 256 / 32 * 256 / 32, FULL_1ST, 0.5, new RetifierdLinear());
+        FullyConnect fc1 = new FullyConnect("fc1", pre, FULL_1ST, 0.5, new RetifierdLinear());
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", FULL_1ST, categories.size(), 1, new SoftMaxFunction());
+        FullyConnect fc2 = new FullyConnect("fc2", fc1, categories.size(), 1, new SoftMaxFunction());
         
         List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))

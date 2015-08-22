@@ -19,7 +19,6 @@ import java.util.Collections;
 import java.util.DoubleSummaryStatistics;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Random;
 import java.util.function.DoubleToIntFunction;
 import java.util.stream.Collectors;
@@ -41,10 +40,10 @@ public class ConvolutionalNet {
     private static final double ep = 0.00001;
     private static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
-    private static final boolean USE_GPU2 = false;
-    private static final int FILTER_1ST = 12;
-    private static final int FILTER_2ND = 16;
-    private static final int FULL_1ST = 32;
+    private static final boolean USE_GPU2 = true;
+    private static final int FILTER_1ST = 96;
+    private static final int FILTER_2ND = 384;
+    private static final int FULL_1ST = 4096;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
@@ -336,7 +335,7 @@ public class ConvolutionalNet {
             this.delta = delta;
             this.result = result;
             this.localEp = ep / (outputWidth * outputHeight);
-            this.biasDelta = Arrays.copyOf(result, result.length);
+            this.biasDelta = new double[result.length];
             
             if(useGpu){
                 put(delta);
@@ -381,18 +380,15 @@ public class ConvolutionalNet {
             for(int f = 0; f < outputChannels; ++f){
                 for(int i = 0; i < filterSize; ++i){
                     int x = (xx  - i + sizeHalf) / stride;
-                    if(xx == x * stride + i - sizeHalf
-                            && x >= 0 && x < outputWidth){
+                    int xd = x + i - sizeHalf;
+                    if(//xx == x * stride + i - sizeHalf &&
+                             x >= 0 && x < outputWidth)if(xx==xd){
                         for(int j = 0; j < filterSize; ++j){
                             int y = (yy - j + sizeHalf) / stride;
-                            if(yy == y * stride + j -sizeHalf
-                                    && y >= 0 && y < outputHeight){
+                            if(yy == y * stride + j -sizeHalf &&
+                                    y >= 0 && y < outputHeight){
                                 int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
                                 double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
-                                /*
-                                tempDelta += d * filter[f * inputChannels * filterSize * filterSize + 
-                                            ch * filterSize * filterSize + i * filterSize + j];
-                                */
                                 tempDelta += d * input[chxxyy] * filter[f * inputChannels * filterSize * filterSize + 
                                             ch * filterSize * filterSize + i * filterSize + j];
                             }
@@ -436,6 +432,7 @@ public class ConvolutionalNet {
                 put(filter);
                 put(delta);
                 put(result);
+                put(input);
                 execute( inputChannels * inputWidth * inputHeight);
                 get(newDelta);
             }else{
@@ -689,12 +686,25 @@ public class ConvolutionalNet {
                 // GPUバージョン
                 double[] newDelta = convolutionBackwordDeltaKernel.backword(input, delta, result, 
                         inputChannels, inputWidth, inputHeight, filter,
-                        outputChannels, outputWidth, outputHeight, filterSize, stride, true);
+                        outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
                 convolutionBackwordFilterKernel.backword(delta, result, input, 
                         inputChannels, inputWidth, inputHeight, filter, 
                         outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
                 convolutionBackwordBiasKernel.backwordBias(delta, result, 
                         outputChannels, outputWidth, outputHeight, bias, useGpu);
+                
+                if(convolutionBackwordDeltaKernel.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
+                        convolutionBackwordFilterKernel.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
+                        convolutionBackwordBiasKernel.getExecutionMode() != Kernel.EXECUTION_MODE.GPU){
+                    useGpu = false;
+                }
+                if(!useGpu){
+                    System.out.println("Can't use GPU on " + name);
+                    System.out.println("delta" + convolutionBackwordDeltaKernel.getExecutionMode());
+                    System.out.println("filter" + convolutionBackwordFilterKernel.getExecutionMode());
+                    System.out.println("bias" +convolutionBackwordBiasKernel.getExecutionMode());
+                }
+                
                 return newDelta;
                 /*
                 return convolutionBackwordKernel.backword(delta, result,
@@ -710,6 +720,20 @@ public class ConvolutionalNet {
                         filterSize, stride, bias, false);
             }
         }
+
+        public int getOutputSize(){
+            return outputChannels * outputWidth * outputHeight;
+        }
+        
+        @Override
+        public String toString() {
+            return String.format("Convolutional:%s filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d",
+                    name, this.filterSize, this.filterSize, this.outputChannels, this.stride,
+                    this.inputWidth, this.inputHeight, this.inputChannels,
+                    this.outputWidth, this.outputHeight, this.outputChannels);
+                    
+        }
+        
     }
     
     static class MaxPoolingLayer extends ImageNeuralLayer{
@@ -793,6 +817,14 @@ public class ConvolutionalNet {
 
 
             return newDelta;
+        }
+        @Override
+        public String toString() {
+            return String.format("Max pooling:%s size:%dx%d stride:%d in:%dx%dx%d out %dx%dx%d",
+                    name, this.size, this.size, this.stride,
+                    this.inputWidth, this.inputHeight, this.inputChannels,
+                    this.outputWidth, this.outputHeight, this.outputChannels);
+                    
         }
     }
     
@@ -919,13 +951,21 @@ public class ConvolutionalNet {
                 .mapToDouble(ch -> delta[ch] * rates[ch] + averages[ch])
                 .toArray();
         }
-        
+        @Override
+        public String toString() {
+            return String.format("Normalize:%s size:%dx%d stride:1 in:%dx%dx%d out %dx%dx%d",
+                    name, this.size, this.size,
+                    this.inputWidth, this.inputHeight, this.inputChannels,
+                    this.outputWidth, this.outputHeight, this.outputChannels);
+                    
+        }        
     }
     
     static class FullyConnect extends NeuralLayer{
         double[][] weight;
         double[] bias;
         int out;
+        int in;
         int[] dropout;
         double dropoutRate = 1;
         double localEp;
@@ -948,6 +988,7 @@ public class ConvolutionalNet {
         public FullyConnect(String name, int in, int out, double[][] weight, double[] bias, double dropoutRate, double localEp, ActivationFunction activation) {
             super(name, activation);
             this.name = name;
+            this.in = in;
             this.out = out;
             this.weight = weight;
             this.bias = bias;
@@ -978,10 +1019,10 @@ public class ConvolutionalNet {
         }
         @Override
         double[] backward(double[] in, double[] delta){
-			
+			/*
             double[][] oldweight = Arrays.stream(weight).parallel()
                     .map(row -> Arrays.copyOf(row, row.length))
-                    .toArray(double[][]::new);
+                    .toArray(double[][]::new);*/
             double[] newDelta = new double[in.length];
             double[] diffed = Arrays.stream(result).map(activation::diff).toArray();
             
@@ -991,7 +1032,7 @@ public class ConvolutionalNet {
                         continue;
                     }
                     double d = diffed[j] * delta[j];
-                    newDelta[i] += d * in[i] * oldweight[i][j];
+                    newDelta[i] += d * in[i] * weight[i][j];
                     weight[i][j] += d * in[i] * localEp;
                 }
             });
@@ -1002,6 +1043,12 @@ public class ConvolutionalNet {
             });
             return newDelta;
         }
+
+        @Override
+        public String toString() {
+            return String.format("Fully connect:%s %d->%d dropout:%.2f", name, in, out, dropoutRate);
+        }
+        
     }
     
     static List<Double> historyData = new ArrayList<>();
@@ -1020,30 +1067,39 @@ public class ConvolutionalNet {
         f.setVisible(true);
         
         List<NeuralLayer> layers = new ArrayList<>();
-        InputFilter input = new InputFilter(256, 256);
+        InputFilter input = new InputFilter(227, 227);
         layers.add(input);
         
         ImageNeuralLayer pre = input;
         //一段目
-        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, true));
         //一段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool1", 3, 2, pre));
         //一段目の正規化
-        layers.add(pre = new NormalizeLayer("norm1", 5, .1, pre, USE_GPU1));
+        layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, true));
         //二段目
-        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 2, USE_GPU2));
+        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, true));
         //二段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool2", 3, 2, pre));
         
-        NormalizeLayer norm2 = new NormalizeLayer("norm2", 5, .1, pre, USE_GPU2);
-        layers.add(pre = norm2);
+        layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, true));
+        
+        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, true));
+        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, true));
+        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, true));
+        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        
+        FullyConnect fc0;
+        layers.add(fc0 = new FullyConnect("fc0", pre, 4096, .5, new RetifierdLinear()));
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", pre, FULL_1ST, 0.5, new RetifierdLinear());
+        FullyConnect fc1 = new FullyConnect("fc1", fc0, FULL_1ST, 0.5, new RetifierdLinear());
         layers.add(fc1);
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", fc1, categories.size(), 1, new SoftMaxFunction());
         layers.add(fc2);
+        
+        layers.forEach(System.out::println);
         
         List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))
@@ -1072,7 +1128,7 @@ public class ConvolutionalNet {
                 throw new UncheckedIOException(ex);
             }
             BufferedImage resized = resize(readImg, 256 + 32, 256 + 32, true, img.inverse);
-            BufferedImage moved = move(resized, 256, 256, img.x * 16, img.y * 16);
+            BufferedImage moved = resize(move(resized, 256, 256, img.x * 16, img.y * 16), 227, 227);
             double[] readData = normalize(imageToArray(moved));
 
             double[] output = forward(layers, readData, correctData);

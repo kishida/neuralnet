@@ -18,9 +18,9 @@ public class SoftMaxFunction extends ActivationFunction {
     @Override
     public double[] applyAfter(double[] values) {
         double total = Arrays.stream(values).parallel()
-                .map((double d) -> Math.exp(d)).sum();
+                .map((double d) -> Math.exp(Math.min(700, d))).sum();
         return Arrays.stream(values).parallel()
-                .map((double d) -> Math.exp(d) / total).toArray();
+                .map((double d) -> Math.exp(Math.min(700, d)) / total).toArray();
     }
 
     @Override

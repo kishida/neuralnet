@@ -4,11 +4,9 @@ import kishida.cnn.layers.ImageNeuralLayer;
 import kishida.cnn.layers.MaxPoolingLayer;
 import kishida.cnn.layers.ConvolutionLayer;
 import kishida.cnn.layers.FullyConnect;
-import kishida.cnn.layers.NormalizeLayer;
 import kishida.cnn.layers.InputLayer;
 import kishida.cnn.layers.NeuralLayer;
 import kishida.cnn.activation.SoftMaxFunction;
-import kishida.cnn.activation.RetifierdLinear;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -39,8 +37,10 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
+import kishida.cnn.activation.LimitedRetifierdLinear;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
+import kishida.cnn.layers.MultiNormalizeLayer;
 
 /**
  *
@@ -51,14 +51,14 @@ public class ConvolutionalNet {
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
-    private static final int FILTER_1ST = 48;
-    private static final int FILTER_2ND = 96;
-    private static final int FULL_1ST = 1024;
+    private static final int FILTER_1ST = 96;
+    private static final int FILTER_2ND = 256;
+    private static final int FULL_1ST = 4096;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
-    private static final int FILTER_ROWS = 4;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
-    private static final int FILTER_COLS = 6;//FILTER_1ST / h;
+    private static final int FILTER_ROWS = 8;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
+    private static final int FILTER_COLS = 12;//FILTER_1ST / h;
 
     static class Img{
 
@@ -99,26 +99,27 @@ public class ConvolutionalNet {
         //一段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool1", 3, 2, pre));
         //一段目の正規化
-        layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
+        //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
+        layers.add(pre = new MultiNormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
         //二段目
         layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, ep, USE_GPU2));
         //二段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool2", 3, 2, pre));
 
-        layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
+        //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
+        layers.add(pre = new MultiNormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
 
-        //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, USE_GPU1));
-        //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, USE_GPU1));
-        //layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, USE_GPU1));
-        //layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        //FullyConnect fc0 = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep);
-        //layers.add(npre = fc0);
+        layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new LimitedRetifierdLinear(10), ep));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new RetifierdLinear(), ep);
+        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new LimitedRetifierdLinear(10), ep);
         layers.add(npre = fc1);
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, new SoftMaxFunction(), ep);

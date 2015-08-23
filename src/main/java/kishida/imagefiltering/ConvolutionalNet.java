@@ -37,17 +37,17 @@ import javax.swing.JTabbedPane;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.00001;
+    private static final double ep = 0.001;
     private static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
-    private static final int FILTER_1ST = 96;
-    private static final int FILTER_2ND = 384;
+    private static final int FILTER_1ST = 48;
+    private static final int FILTER_2ND = 96;
     private static final int FULL_1ST = 4096;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
-    private static final int FILTER_ROWS = 8;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
+    private static final int FILTER_ROWS = 4;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
     private static final int FILTER_COLS = 6;//FILTER_1ST / h;
 
     static class Img{
@@ -380,12 +380,11 @@ public class ConvolutionalNet {
             for(int f = 0; f < outputChannels; ++f){
                 for(int i = 0; i < filterSize; ++i){
                     int x = (xx  - i + sizeHalf) / stride;
-                    int xd = x + i - sizeHalf;
-                    if(//xx == x * stride + i - sizeHalf &&
-                             x >= 0 && x < outputWidth)if(xx==xd){
+                    if((xx - i + sizeHalf) % stride == 0 && // yy == y * stride + j -sizeHalf だとなぜかGPUで動かない
+                             x >= 0 && x < outputWidth){
                         for(int j = 0; j < filterSize; ++j){
                             int y = (yy - j + sizeHalf) / stride;
-                            if(yy == y * stride + j -sizeHalf &&
+                            if((yy - j + sizeHalf) % stride == 0 &&
                                     y >= 0 && y < outputHeight){
                                 int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
                                 double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
@@ -662,8 +661,11 @@ public class ConvolutionalNet {
         }        
         public ConvolutionLayer(String name, int channel, int width, int height, int filterCount,  int size, int stride, boolean useGpu) {
             super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
-            this.filter = random.doubles(size * size * channel * filterCount)
-                    .map(d -> (d * 2 - 0.5) / size / size / channel)
+            this.filter = IntStream.range(0, size * size * channel * filterCount)
+                    .mapToDouble(d -> (random.nextDouble() + random.nextDouble() + random.nextDouble() +
+                                       random.nextDouble() + random.nextDouble() + random.nextDouble() + 
+                                       random.nextDouble() + random.nextDouble() + random.nextDouble() + 
+                                       random.nextDouble() + random.nextDouble() + random.nextDouble() - 6 - 0.5) / size / size / channel)
                     .toArray();
             this.bias = DoubleStream.generate(() -> .1).limit(filterCount).toArray();
             this.stride = stride;
@@ -980,7 +982,12 @@ public class ConvolutionalNet {
         }
         public FullyConnect(String name, int in, int out, double dropoutRate, ActivationFunction activation) {
             this(name, in, out, Stream.generate(() ->
-                    DoubleStream.generate(() -> (random.nextDouble() * 1.5 - .5) / in).limit(out).toArray()
+                    IntStream.range(0, out).mapToDouble(d -> (
+                            random.nextDouble() + random.nextDouble() + random.nextDouble() +
+                            random.nextDouble() + random.nextDouble() + random.nextDouble() +
+                            random.nextDouble() + random.nextDouble() + random.nextDouble() +
+                            random.nextDouble() + random.nextDouble() + random.nextDouble() 
+                            - 6) / in).toArray()
             ).limit(in).toArray(double[][]::new),
             DoubleStream.generate(() -> .1).limit(out).toArray(), dropoutRate, ep, activation);
 
@@ -1015,6 +1022,10 @@ public class ConvolutionalNet {
                 result[j] += bias[j];
             });
             result = activation.applyAfter(result);
+            if(!Arrays.stream(result).allMatch(Double::isFinite)){
+                System.out.println("there is infinite value");
+                System.out.println(Arrays.toString(result));
+            }
             return result;
         }
         @Override
@@ -1084,19 +1095,19 @@ public class ConvolutionalNet {
         
         layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, true));
         
-        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, true));
-        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, true));
-        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, true));
-        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, true));
+        //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, true));
+        //layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, true));
+        //layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
         
-        FullyConnect fc0;
-        layers.add(fc0 = new FullyConnect("fc0", pre, 4096, .5, new RetifierdLinear()));
+        //FullyConnect fc0;
+        //layers.add(fc0 = new FullyConnect("fc0", pre, 4096, .5, new RetifierdLinear()));
         
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", fc0, FULL_1ST, 0.5, new RetifierdLinear());
+        FullyConnect fc1 = new FullyConnect("fc1", pre, 2048, 0.5, new RetifierdLinear());
         layers.add(fc1);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", fc1, categories.size(), 1, new SoftMaxFunction());
+        FullyConnect fc2 = new FullyConnect("fc2", fc1, 300, 1, new SoftMaxFunction());
         layers.add(fc2);
         
         layers.forEach(System.out::println);
@@ -1117,8 +1128,9 @@ public class ConvolutionalNet {
         files.stream().forEach(img -> {
             Path p = img.filename;
             String catName = p.getParent().getFileName().toString();
-            double[] correctData = categories.stream()
-                    .mapToDouble(name -> name.equals(catName) ? 1 : 0)
+            double[] correctData = DoubleStream.concat(categories.stream()
+                    .mapToDouble(name -> name.equals(catName) ? 1 : 0),
+                    DoubleStream.generate(() -> 0)).limit(1000)
                     .toArray();
 
             BufferedImage readImg;
@@ -1148,6 +1160,9 @@ public class ConvolutionalNet {
             if(maxIndex < 0){
                 org.setText("no data");
                 rateData.add(0);
+            }else if(maxIndex >= categories.size()){
+                org.setText("out of data");
+                rateData.add(0);
             }else{
                 org.setText(categories.get(maxIndex));
                 rateData.add((int)correctData[maxIndex] );
@@ -1175,7 +1190,7 @@ public class ConvolutionalNet {
                 pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(pool1.result, i, pool1.outputWidth, pool1.outputHeight), 48, 48)));
             }
             ImageNeuralLayer norm1 = (ImageNeuralLayer) layers.get(3);
-            for(int i = 0; i < norm1.outputChannels; ++i){
+            for(int i = 0; i < Math.min(normedLabel.length, norm1.outputChannels); ++i){
                 normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(norm1.result, i, norm1.outputWidth, norm1.outputHeight), 48, 48)));
             }
             //全結合一段の表示
@@ -1187,6 +1202,8 @@ public class ConvolutionalNet {
             secondBias.setIcon(new ImageIcon(createGraph(500, 128, ((ConvolutionLayer)layers.get(4)).bias)));
             fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.bias)));
             fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.bias)));
+            
+            //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
             
             count[0]++;
             if(count[0] >= 10){
@@ -1273,7 +1290,7 @@ public class ConvolutionalNet {
         JTabbedPane tab = new JTabbedPane(JTabbedPane.RIGHT);
         f.add(tab);
         JPanel middle = new JPanel();
-        tab.add("filter", middle);
+        tab.add("Filter", middle);
         middle.setLayout(new GridLayout(FILTER_ROWS, FILTER_COLS));
         Arrays.stream(filtersLabel).forEach(middle::add);
         JPanel filtered = new JPanel();

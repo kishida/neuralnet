@@ -32,7 +32,7 @@ public class FullyConnect extends NeuralLayer {
 
     public FullyConnect(String name, int in, int out, double dropoutRate, ActivationFunction activation, double ep) {
         this(name, in, out,
-                Stream.generate(() -> IntStream.range(0, out)
+                Stream.generate(() -> IntStream.range(0, out)// ここをparallelにすると、nextDoubleで同期化されて遅くなる
                         .mapToDouble(d -> (
                                 ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +

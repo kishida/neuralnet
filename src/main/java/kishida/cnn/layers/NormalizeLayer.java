@@ -6,8 +6,8 @@
 package kishida.cnn.layers;
 
 import java.util.stream.IntStream;
-import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.LinearFunction;
+import kishida.cnn.kernels.NormalizeKernel;
 
 /**
  *
@@ -36,7 +36,7 @@ public class NormalizeLayer extends ImageNeuralLayer {
     public double[] forward(double[] in) {
         averages = new double[in.length];
         rates = new double[in.length];
-        result = ConvolutionalNet.normalizeKernel.normalize(in, inputChannels, inputWidth, inputHeight, size, averages, rates, threshold, useGpu);
+        result = NormalizeKernel.INSTANCE.normalize(in, inputChannels, inputWidth, inputHeight, size, averages, rates, threshold, useGpu);
         return result;
     }
 

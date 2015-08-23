@@ -10,6 +10,11 @@ import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.RetifierdLinear;
+import kishida.cnn.kernels.ConvolutionBackwordBiasKernel;
+import kishida.cnn.kernels.ConvolutionBackwordDeltaKernel;
+import kishida.cnn.kernels.ConvolutionBackwordFilterKernel;
+import kishida.cnn.kernels.ConvolutionBackwordKernel;
+import kishida.cnn.kernels.ConvolutionForwardKernel;
 
 /** 畳み込み層 */
 public class ConvolutionLayer extends ImageNeuralLayer {
@@ -18,14 +23,16 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     int stride;
     int filterSize;
     boolean useGpu;
+    double ep;
 
-    public ConvolutionLayer(String name, ImageNeuralLayer preLayer, int filterCount, int size, int stride, boolean useGpu) {
-        this(name, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth, filterCount, size, stride, useGpu);
-        this.preLayer = preLayer;
+    public ConvolutionLayer(String name, ImageNeuralLayer preLayer, int filterCount, int size, int stride, double ep, boolean useGpu) {
+        this(name, preLayer, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth, filterCount, size, stride, ep, useGpu);
     }
 
-    public ConvolutionLayer(String name, int channel, int width, int height, int filterCount, int size, int stride, boolean useGpu) {
+    public ConvolutionLayer(String name, ImageNeuralLayer preLayer,int channel, int width, int height, int filterCount, int size, int stride, double ep, boolean useGpu) {
         super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
+        this.ep = ep;
+        this.preLayer = preLayer;
         this.filter = IntStream.range(0, size * size * channel * filterCount).mapToDouble((int d) -> (ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6 - 0.5) / size / size / channel).toArray();
         this.bias = DoubleStream.generate(() -> .1).limit(filterCount).toArray();
         this.stride = stride;
@@ -36,7 +43,7 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     /** 畳み込みフィルタを適用する */
     @Override
     public double[] forward(double[] img) {
-        result = ConvolutionalNet.convolutionForwardKernel.forward(img, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, activation, useGpu);
+        result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, activation, useGpu);
         return result;
     }
 
@@ -45,17 +52,19 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     public double[] backward(double[] input, double[] delta) {
         if (useGpu) {
             // GPUバージョン
-            double[] newDelta = ConvolutionalNet.convolutionBackwordDeltaKernel.backword(input, delta, result, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
-            ConvolutionalNet.convolutionBackwordFilterKernel.backword(delta, result, input, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
-            ConvolutionalNet.convolutionBackwordBiasKernel.backwordBias(delta, result, outputChannels, outputWidth, outputHeight, bias, useGpu);
-            if (ConvolutionalNet.convolutionBackwordDeltaKernel.getExecutionMode() != Kernel.EXECUTION_MODE.GPU || ConvolutionalNet.convolutionBackwordFilterKernel.getExecutionMode() != Kernel.EXECUTION_MODE.GPU || ConvolutionalNet.convolutionBackwordBiasKernel.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
+            double[] newDelta = ConvolutionBackwordDeltaKernel.INSTANCE.backword(input, delta, result, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
+            ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result, input, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, ep, useGpu);
+            ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result, outputChannels, outputWidth, outputHeight, bias, ep, useGpu);
+            if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
+                    ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
+                    ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
                 useGpu = false;
             }
             if (!useGpu) {
                 System.out.println("Can't use GPU on " + name);
-                System.out.println("delta" + ConvolutionalNet.convolutionBackwordDeltaKernel.getExecutionMode());
-                System.out.println("filter" + ConvolutionalNet.convolutionBackwordFilterKernel.getExecutionMode());
-                System.out.println("bias" + ConvolutionalNet.convolutionBackwordBiasKernel.getExecutionMode());
+                System.out.println("delta" + ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode());
+                System.out.println("filter" + ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode());
+                System.out.println("bias" + ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode());
             }
             return newDelta;
             /*
@@ -66,7 +75,7 @@ public class ConvolutionLayer extends ImageNeuralLayer {
              */
         } else {
             // CPUバージョン
-            return ConvolutionalNet.convolutionBackwordKernel.backward(delta, result, input, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, false);
+            return ConvolutionBackwordKernel.INSTANCE.backward(delta, result, input, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, ep, false);
         }
     }
 

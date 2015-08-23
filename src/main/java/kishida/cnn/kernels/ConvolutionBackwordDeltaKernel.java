@@ -41,7 +41,9 @@ public class ConvolutionBackwordDeltaKernel extends Kernel {
                         if ((yy - j + sizeHalf) % stride == 0 && y >= 0 && y < outputHeight) {
                             int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
                             double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
-                            tempDelta += d * input[chxxyy] * filter[f * inputChannels * filterSize * filterSize + ch * filterSize * filterSize + i * filterSize + j];
+                            tempDelta += d * input[chxxyy] *
+                                    filter[f * inputChannels * filterSize * filterSize +
+                                    ch * filterSize * filterSize + i * filterSize + j];
                         }
                     }
                 }
@@ -63,7 +65,10 @@ public class ConvolutionBackwordDeltaKernel extends Kernel {
     double[] delta;
     double[] newDelta;
 
-    public double[] backword(double[] input, double[] delta, double[] result, int inputChannels, int inputWidth, int inputHeight, double[] filter, int outputChannels, int outputWidth, int outputHeight, int filterSize, int stride, boolean useGpu) {
+    public double[] backword(double[] input, double[] delta, double[] result,
+            int inputChannels, int inputWidth, int inputHeight,
+            double[] filter, int outputChannels, int outputWidth, int outputHeight,
+            int filterSize, int stride, boolean useGpu) {
         this.input = input;
         this.delta = delta;
         this.inputChannels = inputChannels;
@@ -85,7 +90,7 @@ public class ConvolutionBackwordDeltaKernel extends Kernel {
             execute(inputChannels * inputWidth * inputHeight);
             get(newDelta);
         } else {
-            IntStream.range(0, inputChannels * inputWidth).parallel().forEach((chx) -> {
+            IntStream.range(0, inputChannels * inputWidth).parallel().forEach(chx -> {
                 for (int y = 0; y < inputHeight; ++y) {
                     proc(chx * inputHeight + y);
                 }

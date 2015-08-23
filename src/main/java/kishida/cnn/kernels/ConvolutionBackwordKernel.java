@@ -38,12 +38,18 @@ public class ConvolutionBackwordKernel extends Kernel {
                     for (int j = 0; j < filterSize; ++j) {
                         int yy = y * stride + j - filterSize / 2;
                         if (yy >= 0 && yy < inputHeight) {
-                            tempDelta[f * inputChannels * inputWidth * inputHeight + ch * inputWidth * inputHeight + xx * inputHeight + yy] += d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * oldfilter[f * inputChannels * filterSize * filterSize + ch * filterSize * filterSize + i * filterSize + j];
+                            tempDelta[f * inputChannels * inputWidth * inputHeight +
+                                    ch * inputWidth * inputHeight + xx * inputHeight + yy] +=
+                                    d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy] *
+                                    oldfilter[f * inputChannels * filterSize * filterSize +
+                                    ch * filterSize * filterSize + i * filterSize + j];
                             /*
                             d * oldfilter[f * inputChannels * filterSize * filterSize +
                             ch * filterSize * filterSize + i * filterSize + j];
                              */
-                            filter[f * inputChannels * filterSize * filterSize + ch * filterSize * filterSize + i * filterSize + j] += d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                            filter[f * inputChannels * filterSize * filterSize +
+                                    ch * filterSize * filterSize + i * filterSize + j] +=
+                                    d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
                         }
                     }
                 }

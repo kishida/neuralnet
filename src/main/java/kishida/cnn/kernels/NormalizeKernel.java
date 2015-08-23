@@ -74,7 +74,8 @@ public class NormalizeKernel extends Kernel {
     int size;
     double threshold;
 
-    public double[] normalize(double[] input, int inputChannels, int inputWidth, int inputHeight, int size, double[] averages, double[] rates, double threshold, boolean useGpu) {
+    public double[] normalize(double[] input, int inputChannels, int inputWidth, int inputHeight,
+            int size, double[] averages, double[] rates, double threshold, boolean useGpu) {
         this.input = input;
         this.rates = rates;
         this.result = new double[inputChannels * inputWidth * inputHeight];
@@ -91,7 +92,7 @@ public class NormalizeKernel extends Kernel {
             get(rates);
             get(result);
         } else {
-            IntStream.range(0, inputChannels).parallel().forEach((ch) -> {
+            IntStream.range(0, inputChannels).parallel().forEach(ch -> {
                 for (int x = 0; x < inputWidth; ++x) {
                     for (int y = 0; y < inputHeight; ++y) {
                         proc(ch * inputWidth * inputHeight + x * inputHeight + y);

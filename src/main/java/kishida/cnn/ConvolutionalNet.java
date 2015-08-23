@@ -193,19 +193,23 @@ public class ConvolutionalNet {
             //一段目のフィルタの表示
             ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
             for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
+                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
+                        conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
             }
             //フィルタ後の表示
             for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
+                filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(
+                        conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
             }
             ImageNeuralLayer pool1 = (ImageNeuralLayer) layers.get(2);
             for(int i = 0; i < pool1.getOutputChannels(); ++i){
-                pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
+                pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                        pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
             }
             ImageNeuralLayer norm1 = (ImageNeuralLayer) layers.get(3);
             for(int i = 0; i < Math.min(normedLabel.length, norm1.getOutputChannels()); ++i){
-                normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
+                normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                        norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
             }
             //全結合一段の表示
             firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
@@ -221,7 +225,8 @@ public class ConvolutionalNet {
 
             count[0]++;
             if(count[0] >= 10){
-                System.out.printf("%4d %.2f %s %s%n", count[0], 10 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
+                System.out.printf("%4d %.2f %s %s%n",
+                        count[0], 10 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                         ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                         ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
                 count[0] = 0;
@@ -416,7 +421,8 @@ public class ConvolutionalNet {
         DoubleSummaryStatistics summary = Arrays.stream(filteredData,
                 idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
                 .summaryStatistics();
-        double[] normed = Arrays.stream(filteredData, idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
+        double[] normed = Arrays.stream(filteredData,
+                idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
                         .map(d -> (d - summary.getMin())
                                 / (summary.getMax() - summary.getMin()))
                         .toArray();

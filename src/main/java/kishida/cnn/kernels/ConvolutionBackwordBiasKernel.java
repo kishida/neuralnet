@@ -34,7 +34,9 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
         biasDelta[fxy] = localEp * d;
     }
 
-    public void backwordBias(double[] delta, double[] result, int outputChannels, int outputWidth, int outputHeight, double[] bias, double ep, boolean useGpu) {
+    public void backwordBias(double[] delta, double[] result,
+            int outputChannels, int outputWidth, int outputHeight,
+            double[] bias, double ep, boolean useGpu) {
         this.delta = delta;
         this.result = result;
         this.localEp = ep / (outputWidth * outputHeight);
@@ -44,13 +46,13 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
             put(result);
             execute(outputChannels * outputWidth * outputHeight);
             get(biasDelta);
-            IntStream.range(0, outputChannels).parallel().forEach((f) -> {
+            IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
                     bias[f] += biasDelta[f * outputWidth * outputHeight + xy];
                 }
             });
         } else {
-            IntStream.range(0, outputChannels).parallel().forEach((f) -> {
+            IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
                     proc(f * outputWidth * outputHeight + xy);
                     bias[f] += biasDelta[f * outputWidth * outputHeight + xy];

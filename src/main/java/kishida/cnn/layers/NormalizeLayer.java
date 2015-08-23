@@ -21,10 +21,12 @@ public class NormalizeLayer extends ImageNeuralLayer {
     boolean useGpu;
 
     public NormalizeLayer(String name, int size, double threshold, ImageNeuralLayer preLayer, boolean useGpu) {
-        this(name, size, threshold, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputHeight, preLayer, useGpu);
+        this(name, size, threshold,
+                preLayer.outputChannels, preLayer.outputWidth, preLayer.outputHeight, preLayer, useGpu);
     }
 
-    public NormalizeLayer(String name, int size, double threshold, int channels, int width, int height, ImageNeuralLayer preLayer, boolean useGpu) {
+    public NormalizeLayer(String name, int size, double threshold,
+            int channels, int width, int height, ImageNeuralLayer preLayer, boolean useGpu) {
         super(name, new LinearFunction(), channels, width, height, channels, width, height);
         this.preLayer = preLayer;
         this.size = size;
@@ -36,18 +38,23 @@ public class NormalizeLayer extends ImageNeuralLayer {
     public double[] forward(double[] in) {
         averages = new double[in.length];
         rates = new double[in.length];
-        result = NormalizeKernel.INSTANCE.normalize(in, inputChannels, inputWidth, inputHeight, size, averages, rates, threshold, useGpu);
+        result = NormalizeKernel.INSTANCE.normalize(in, inputChannels, inputWidth, inputHeight,
+                size, averages, rates, threshold, useGpu);
         return result;
     }
 
     @Override
     public double[] backward(double[] in, double[] delta) {
-        return IntStream.range(0, delta.length).parallel().mapToDouble((ch) -> delta[ch] * rates[ch] + averages[ch]).toArray();
+        return IntStream.range(0, delta.length).parallel()
+                .mapToDouble(ch -> delta[ch] * rates[ch] + averages[ch]).toArray();
     }
 
     @Override
     public String toString() {
-        return String.format("Normalize:%s size:%dx%d stride:1 in:%dx%dx%d out %dx%dx%d", name, this.size, this.size, this.inputWidth, this.inputHeight, this.inputChannels, this.outputWidth, this.outputHeight, this.outputChannels);
+        return String.format("Normalize:%s size:%dx%d stride:1 in:%dx%dx%d out %dx%dx%d",
+                name, this.size, this.size,
+                this.inputWidth, this.inputHeight, this.inputChannels,
+                this.outputWidth, this.outputHeight, this.outputChannels);
     }
 
 }

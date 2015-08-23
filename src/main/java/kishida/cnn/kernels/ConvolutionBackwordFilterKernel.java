@@ -60,7 +60,10 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
     int stride;
     double localEp;
 
-    public void backword(double[] delta, double[] result, double[] input, int inputChannels, int inputWidth, int inputHeight, double[] filter, int outputChannels, int outputWidth, int outputHeight, int filterSize, int stride, double ep, boolean useGpu) {
+    public void backword(double[] delta, double[] result,
+            double[] input, int inputChannels, int inputWidth, int inputHeight,
+            double[] filter, int outputChannels, int outputWidth, int outputHeight,
+            int filterSize, int stride, double ep, boolean useGpu) {
         this.input = input;
         this.delta = delta;
         this.inputChannels = inputChannels;

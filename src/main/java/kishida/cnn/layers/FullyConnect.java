@@ -40,11 +40,13 @@ public class FullyConnect extends NeuralLayer {
                                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6) / in)
-                        .toArray()).limit(in).toArray(double[][]::new), DoubleStream.generate(() -> .1).limit(out).toArray()
+                        .toArray()).limit(in).toArray(double[][]::new),
+                DoubleStream.generate(() -> .1).limit(out).toArray()
                 , dropoutRate, ep, activation);
     }
 
-    public FullyConnect(String name, int in, int out, double[][] weight, double[] bias, double dropoutRate, double localEp, ActivationFunction activation) {
+    public FullyConnect(String name, int in, int out, double[][] weight,
+            double[] bias, double dropoutRate, double localEp, ActivationFunction activation) {
         super(name, activation);
         this.name = name;
         this.in = in;

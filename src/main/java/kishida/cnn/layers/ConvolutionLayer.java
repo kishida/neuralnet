@@ -25,15 +25,25 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     boolean useGpu;
     double ep;
 
-    public ConvolutionLayer(String name, ImageNeuralLayer preLayer, int filterCount, int size, int stride, double ep, boolean useGpu) {
-        this(name, preLayer, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth, filterCount, size, stride, ep, useGpu);
+    public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
+            int filterCount, int size, int stride, double ep, boolean useGpu) {
+        this(name, preLayer, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth,
+                filterCount, size, stride, ep, useGpu);
     }
 
-    public ConvolutionLayer(String name, ImageNeuralLayer preLayer,int channel, int width, int height, int filterCount, int size, int stride, double ep, boolean useGpu) {
+    public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
+            int channel, int width, int height, int filterCount, int size, int stride, double ep, boolean useGpu) {
         super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
         this.ep = ep;
         this.preLayer = preLayer;
-        this.filter = IntStream.range(0, size * size * channel * filterCount).mapToDouble((int d) -> (ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6 - 0.5) / size / size / channel).toArray();
+        this.filter = IntStream.range(0, size * size * channel * filterCount)
+                .mapToDouble(d -> (ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
+                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
+                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
+                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
+                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
+                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6 - 0.5)
+                        / size / size / channel).toArray();
         this.bias = DoubleStream.generate(() -> .1).limit(filterCount).toArray();
         this.stride = stride;
         this.filterSize = size;
@@ -43,7 +53,8 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     /** 畳み込みフィルタを適用する */
     @Override
     public double[] forward(double[] img) {
-        result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, activation, useGpu);
+        result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
+                filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, activation, useGpu);
         return result;
     }
 
@@ -52,9 +63,14 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     public double[] backward(double[] input, double[] delta) {
         if (useGpu) {
             // GPUバージョン
-            double[] newDelta = ConvolutionBackwordDeltaKernel.INSTANCE.backword(input, delta, result, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
-            ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result, input, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, ep, useGpu);
-            ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result, outputChannels, outputWidth, outputHeight, bias, ep, useGpu);
+            double[] newDelta = ConvolutionBackwordDeltaKernel.INSTANCE.backword(input, delta, result,
+                    inputChannels, inputWidth, inputHeight,
+                    filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
+            ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result,
+                    input, inputChannels, inputWidth, inputHeight,
+                    filter, outputChannels, outputWidth, outputHeight, filterSize, stride, ep, useGpu);
+            ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result,
+                    outputChannels, outputWidth, outputHeight, bias, ep, useGpu);
             if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
@@ -75,7 +91,9 @@ public class ConvolutionLayer extends ImageNeuralLayer {
              */
         } else {
             // CPUバージョン
-            return ConvolutionBackwordKernel.INSTANCE.backward(delta, result, input, inputChannels, inputWidth, inputHeight, filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, ep, false);
+            return ConvolutionBackwordKernel.INSTANCE.backward(delta, result,
+                    input, inputChannels, inputWidth, inputHeight,
+                    filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, ep, false);
         }
     }
 
@@ -89,7 +107,9 @@ public class ConvolutionLayer extends ImageNeuralLayer {
 
     @Override
     public String toString() {
-        return String.format("Convolutional:%s filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d", name, this.filterSize, this.filterSize, this.outputChannels, this.stride, this.inputWidth, this.inputHeight, this.inputChannels, this.outputWidth, this.outputHeight, this.outputChannels);
+        return String.format("Convolutional:%s filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d",
+                name, filterSize, filterSize, outputChannels, stride,
+                inputWidth, inputHeight, inputChannels, outputWidth, outputHeight, outputChannels);
     }
 
 }

@@ -19,7 +19,9 @@ public abstract class ImageNeuralLayer extends NeuralLayer {
     int outputWidth;
     int outputHeight;
 
-    public ImageNeuralLayer(String name, ActivationFunction activation, int inputChannels, int inputWidth, int inputHeight, int outputChannels, int outputWidth, int outputHeight) {
+    public ImageNeuralLayer(String name, ActivationFunction activation,
+            int inputChannels, int inputWidth, int inputHeight,
+            int outputChannels, int outputWidth, int outputHeight) {
         super(name, activation);
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;

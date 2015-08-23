@@ -22,7 +22,9 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
     }
 
     public MaxPoolingLayer(String name, int size, int stride, int channels, int inputWidth, int inputHeight) {
-        super(name, new LinearFunction(), channels, inputWidth, inputHeight, channels, inputWidth / stride, inputHeight / stride);
+        super(name, new LinearFunction(),
+                channels, inputWidth, inputHeight,
+                channels, inputWidth / stride, inputHeight / stride);
         this.size = size;
         this.stride = stride;
     }
@@ -86,7 +88,8 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
                         }
                     }
                     int chxy = ch * outputWidth * outputHeight + x * outputHeight + y;
-                    newDelta[ch * inputWidth * inputHeight + maxX * inputHeight + maxY] += result[chxy] * delta[chxy];
+                    newDelta[ch * inputWidth * inputHeight + maxX * inputHeight + maxY] +=
+                            result[chxy] * delta[chxy];
                 }
             }
         });
@@ -95,7 +98,10 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
 
     @Override
     public String toString() {
-        return String.format("Max pooling:%s size:%dx%d stride:%d in:%dx%dx%d out %dx%dx%d", name, this.size, this.size, this.stride, this.inputWidth, this.inputHeight, this.inputChannels, this.outputWidth, this.outputHeight, this.outputChannels);
+        return String.format("Max pooling:%s size:%dx%d stride:%d in:%dx%dx%d out %dx%dx%d",
+                name, this.size, this.size, this.stride,
+                this.inputWidth, this.inputHeight, this.inputChannels,
+                this.outputWidth, this.outputHeight, this.outputChannels);
     }
 
 }

@@ -38,7 +38,9 @@ public class ConvolutionForwardKernel extends Kernel {
                     for (int j = 0; j < filterSize; ++j) {
                         int yy = y * stride + j - filterSize / 2;
                         if (yy >= 0 && yy < inputHeight) {
-                            r += input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * filter[fi * inputChannels * filterSize * filterSize + ch * filterSize * filterSize + i * filterSize + j];
+                            r += input[ch * inputWidth * inputHeight + xx * inputHeight + yy] *
+                                    filter[fi * inputChannels * filterSize * filterSize +
+                                    ch * filterSize * filterSize + i * filterSize + j];
                         }
                     }
                 }
@@ -59,7 +61,9 @@ public class ConvolutionForwardKernel extends Kernel {
     int stride;
     double[] bias;
 
-    public double[] forward(double[] input, int inputChannels, int inputWidth, int inputHeight, double[] filter, int outputChannels, int outputWidth, int outputHeight, int filterSize, int stride, double[] bias, ActivationFunction activation, boolean useGpu) {
+    public double[] forward(double[] input, int inputChannels, int inputWidth, int inputHeight,
+            double[] filter, int outputChannels, int outputWidth, int outputHeight,
+            int filterSize, int stride, double[] bias, ActivationFunction activation, boolean useGpu) {
         this.input = input;
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;
@@ -79,7 +83,7 @@ public class ConvolutionForwardKernel extends Kernel {
             execute(outputChannels * outputWidth * outputHeight);
             get(result);
         } else {
-            IntStream.range(0, outputChannels * outputWidth * outputHeight).parallel().forEach((fxy) -> {
+            IntStream.range(0, outputChannels * outputWidth * outputHeight).parallel().forEach(fxy -> {
                 proc(fxy);
             });
         }

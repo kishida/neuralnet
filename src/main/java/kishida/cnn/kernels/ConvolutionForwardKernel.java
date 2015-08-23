@@ -26,10 +26,10 @@ public class ConvolutionForwardKernel extends Kernel {
         proc(fixy);
     }
 
-    private void proc(int fixy) {
-        int fi = fixy / (outputHeight * outputWidth);
-        int x = (fixy % (outputHeight * outputWidth)) / outputHeight;
-        int y = fixy % outputHeight;
+    private void proc(int fxy) {
+        int f = fxy / (outputHeight * outputWidth);
+        int x = (fxy % (outputHeight * outputWidth)) / outputHeight;
+        int y = fxy % outputHeight;
         double r = 0; // 毎回resultを足すよりもまとめて足したほうがGPUの場合に速くなる。
         for (int ch = 0; ch < inputChannels; ++ch) {
             for (int i = 0; i < filterSize; ++i) {
@@ -39,14 +39,14 @@ public class ConvolutionForwardKernel extends Kernel {
                         int yy = y * stride + j - filterSize / 2;
                         if (yy >= 0 && yy < inputHeight) {
                             r += input[ch * inputWidth * inputHeight + xx * inputHeight + yy] *
-                                    filter[fi * inputChannels * filterSize * filterSize +
+                                    filter[f * inputChannels * filterSize * filterSize +
                                     ch * filterSize * filterSize + i * filterSize + j];
                         }
                     }
                 }
             }
         }
-        result[fixy] += r + bias[fi];
+        result[fxy] += r + bias[f];
     }
     double[] result;
     double[] input;

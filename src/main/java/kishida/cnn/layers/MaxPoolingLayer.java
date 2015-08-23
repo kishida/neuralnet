@@ -33,7 +33,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
     @Override
     public double[] forward(double[] data) {
         result = new double[outputChannels * outputWidth * outputHeight];
-        IntStream.range(0, inputChannels).parallel().forEach((int ch) -> {
+        IntStream.range(0, inputChannels).parallel().forEach(ch -> {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int y = 0; y < outputHeight; ++y) {
                     double max = Double.NEGATIVE_INFINITY;
@@ -63,7 +63,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
     @Override
     public double[] backward(double[] in, double[] delta) {
         double[] newDelta = new double[in.length];
-        IntStream.range(0, inputChannels).parallel().forEach((int ch) -> {
+        IntStream.range(0, inputChannels).parallel().forEach(ch -> {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int y = 0; y < outputHeight; ++y) {
                     double max = Double.NEGATIVE_INFINITY;

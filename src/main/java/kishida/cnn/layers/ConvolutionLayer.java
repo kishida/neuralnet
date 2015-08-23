@@ -83,12 +83,6 @@ public class ConvolutionLayer extends ImageNeuralLayer {
                 System.out.println("bias" + ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode());
             }
             return newDelta;
-            /*
-            return convolutionBackwordKernel.backword(delta, result,
-            input, inputChannels, inputWidth, inputHeight,
-            filter, outputChannels, outputWidth, outputHeight,
-            filterSize, stride, bias, act, useGpu);
-             */
         } else {
             // CPUバージョン
             return ConvolutionBackwordKernel.INSTANCE.backward(delta, result,

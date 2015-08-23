@@ -38,18 +38,12 @@ public class ConvolutionBackwordKernel extends Kernel {
                     for (int j = 0; j < filterSize; ++j) {
                         int yy = y * stride + j - filterSize / 2;
                         if (yy >= 0 && yy < inputHeight) {
+                            double dxinp = d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                            int fcij = f * inputChannels * filterSize * filterSize +
+                                    ch * filterSize * filterSize + i * filterSize + j;
                             tempDelta[f * inputChannels * inputWidth * inputHeight +
-                                    ch * inputWidth * inputHeight + xx * inputHeight + yy] +=
-                                    d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy] *
-                                    oldfilter[f * inputChannels * filterSize * filterSize +
-                                    ch * filterSize * filterSize + i * filterSize + j];
-                            /*
-                            d * oldfilter[f * inputChannels * filterSize * filterSize +
-                            ch * filterSize * filterSize + i * filterSize + j];
-                             */
-                            filter[f * inputChannels * filterSize * filterSize +
-                                    ch * filterSize * filterSize + i * filterSize + j] +=
-                                    d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                                    ch * inputWidth * inputHeight + xx * inputHeight + yy] += dxinp * oldfilter[fcij];
+                            filter[fcij] += dxinp * localEp;
                         }
                     }
                 }
@@ -109,14 +103,14 @@ public class ConvolutionBackwordKernel extends Kernel {
             get(tempDelta);
             get(biasDelta);
         } else {
-            IntStream.range(0, outputChannels).parallel().forEach((f) -> {
+            IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
                     proc(f * outputWidth * outputHeight + xy);
                 }
             });
         }
         double[] newDelta = new double[input.length];
-        IntStream.range(0, outputChannels).parallel().forEach((f) -> {
+        IntStream.range(0, outputChannels).parallel().forEach(f -> {
             for (int chxy = 0; chxy < inputChannels * inputWidth * inputHeight; ++chxy) {
                 newDelta[chxy] += tempDelta[f * inputChannels * inputWidth * inputHeight + chxy];
             }

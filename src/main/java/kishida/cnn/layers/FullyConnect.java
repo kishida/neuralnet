@@ -41,7 +41,7 @@ public class FullyConnect extends NeuralLayer {
                                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6) / in)
                         .toArray()).limit(in).toArray(double[][]::new),
-                DoubleStream.generate(() -> .1).limit(out).toArray()
+                DoubleStream.generate(() -> 0).limit(out).toArray()
                 , dropoutRate, ep, activation);
     }
 

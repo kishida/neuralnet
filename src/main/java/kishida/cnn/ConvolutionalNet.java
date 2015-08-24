@@ -37,7 +37,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
-import kishida.cnn.activation.LimitedRetifierdLinear;
+import kishida.cnn.activation.RetifierdLinear;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.layers.MultiNormalizeLayer;
@@ -47,19 +47,19 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.0001;
+    private static final double ep = 0.001;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
-    private static final int FILTER_1ST = 96;
-    private static final int FILTER_2ND = 256;
-    private static final int FULL_1ST = 4096;
+    private static final int FILTER_1ST = 48;
+    private static final int FILTER_2ND = 96;
+    private static final int FULL_1ST = 1024;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
     private static final int FILTER_ROWS = 8;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
     private static final int FILTER_COLS = 12;//FILTER_1ST / h;
-
+    private static final int IMAGE_SIZE = 227;
     static class Img{
 
         public Img(Path filename, boolean inverse, int x, int y) {
@@ -72,6 +72,18 @@ public class ConvolutionalNet {
         boolean inverse;
         int x;
         int y;
+
+        BufferedImage readImage(){
+            BufferedImage readImg;
+            try {
+                readImg = ImageIO.read(filename.toFile());
+            } catch (IOException ex) {
+                throw new UncheckedIOException(ex);
+            }
+            BufferedImage resized = resize(readImg, 256 + 32, 256 + 32, true, inverse);
+            BufferedImage moved = resize(move(resized, 256, 256, x * 16, y * 16), IMAGE_SIZE, IMAGE_SIZE);
+            return moved;
+        }
     }
 
     static List<Double> historyData = new ArrayList<>();
@@ -88,6 +100,47 @@ public class ConvolutionalNet {
 
         JFrame f = createFrame();
         f.setVisible(true);
+
+
+        List<Img> files = Files.walk(dir)
+                .filter(p -> !Files.isDirectory(p))
+                .filter(p -> !p.getParent().getFileName().toString().startsWith("_"))
+                /*
+                .flatMap(p -> IntStream.range(0, 3).mapToObj(i ->
+                        IntStream.range(0, 3).mapToObj(j ->
+                                Stream.of(new Img(p, true, i, j), new Img(p, false, i, j)))
+                                .flatMap(Function.identity())).flatMap(Function.identity()))
+                */
+                .map(p -> new Img(p, true, 0, 0))
+                .collect(Collectors.toList());
+
+
+        // 画素ごとの平均をとる
+        Path avePath = dir.resolve("average.png");
+        BufferedImage aveImage;
+        if(!Files.exists(avePath)){
+            double[] aveData = new double[IMAGE_SIZE * IMAGE_SIZE * 3];
+            int imgCount = 0;
+            for(Img img : files){
+                double[] imageArray = imageToArray(img.readImage());
+                IntStream.range(0, imageArray.length).parallel().forEach( i -> {
+                    aveData[i] += imageArray[i];
+                });
+                ++imgCount;
+                if(imgCount % 100 == 0){
+                    System.out.println(imgCount);
+                }
+            }
+            for(int i = 0; i < aveData.length; ++i){
+                aveData[i] /= files.size();
+            }
+            aveImage = arrayToImageStraight(aveData, IMAGE_SIZE, IMAGE_SIZE);
+            ImageIO.write(aveImage, "png", avePath.toFile());
+        }else{
+            aveImage = ImageIO.read(avePath.toFile());
+        }
+        org.setIcon(new ImageIcon(aveImage));
+        double[] aveData = imageToArray(aveImage);
 
         List<NeuralLayer> layers = new ArrayList<>();
         InputLayer input = new InputLayer(227, 227);
@@ -109,17 +162,17 @@ public class ConvolutionalNet {
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
         layers.add(pre = new MultiNormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
 
-        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new LimitedRetifierdLinear(10), ep));
+        //layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new LimitedRetifierdLinear(10), ep);
+        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new RetifierdLinear(), ep);
         layers.add(npre = fc1);
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, new SoftMaxFunction(), ep);
@@ -127,20 +180,12 @@ public class ConvolutionalNet {
 
         layers.forEach(System.out::println);
 
-        List<Img> files = Files.walk(dir)
-                .filter(p -> !Files.isDirectory(p))
-                .filter(p -> !p.getParent().getFileName().toString().startsWith("_"))
-                .flatMap(p -> IntStream.range(0, 3).mapToObj(i ->
-                        IntStream.range(0, 3).mapToObj(j ->
-                                Stream.of(new Img(p, true, i, j), new Img(p, false, i, j)))
-                                .flatMap(s -> s)).flatMap(s -> s))
-                .collect(Collectors.toList());
         int[] count = {0};
         for(int loop = 0; loop < 30; ++loop){
         Collections.shuffle(files, random);
         long start = System.currentTimeMillis();
         long[] pStart = {start};
-        files.stream().forEach(img -> {
+        for(Img img : files) {
             Path p = img.filename;
             String catName = p.getParent().getFileName().toString();
             double[] correctData = DoubleStream.concat(categories.stream()
@@ -148,15 +193,12 @@ public class ConvolutionalNet {
                     DoubleStream.generate(() -> 0)).limit(categories.size())
                     .toArray();
 
-            BufferedImage readImg;
-            try {
-                readImg = ImageIO.read(p.toFile());
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
+            BufferedImage resized = img.readImage();
+            //double[] readData = normalizeImage(imageToArray(resized));
+            double[] readData = imageToArray(resized);
+            for(int i = 0; i < readData.length; ++i){
+                readData[i] -= aveData[i];
             }
-            BufferedImage resized = resize(readImg, 256 + 32, 256 + 32, true, img.inverse);
-            BufferedImage moved = resize(move(resized, 256, 256, img.x * 16, img.y * 16), 227, 227);
-            double[] readData = normalize(imageToArray(moved));
 
             double[] output = forward(layers, readData, correctData);
             //元画像の表示
@@ -233,7 +275,7 @@ public class ConvolutionalNet {
                 count[0] = 0;
                 pStart[0] = System.currentTimeMillis();
             }
-        });
+        }
         long end = System.currentTimeMillis();
         System.out.println(end - start);
         System.out.printf("%.2fm%n", (end - start) / 1000. / 60);
@@ -441,6 +483,21 @@ public class ConvolutionalNet {
         }
         return filtered;
     }
+    static BufferedImage arrayToImageStraight(double[] filteredData, int width, int height){
+        BufferedImage filtered = new BufferedImage(
+                width, height,
+                BufferedImage.TYPE_INT_RGB);
+        for(int x = 0; x < width; ++x){
+            for(int y = 0; y < height; ++y){
+                filtered.setRGB(x, y,
+                        ((int)(filteredData[x * height + y] * 255) << 16) +
+                        ((int)(filteredData[x * height + y + width * height] * 255) << 8) +
+                         (int)(filteredData[x * height + y + 2 * width * height] * 255));
+            }
+        }
+        return filtered;
+
+    }
     static BufferedImage arrayToImageMono(double[] filteredData, int idx, int width, int height){
         double[] colorData = new double[width * height * 3];
         IntStream.range(0, width).parallel().forEach(x -> {
@@ -470,7 +527,7 @@ public class ConvolutionalNet {
         }
         return imageData;
     }
-    static double[] normalize(double[] data){
+    static double[] normalizeImage(double[] data){
         int size = data.length / 3;
         double[] result = new double[data.length];
         for(int i = 0; i < 3; ++i){

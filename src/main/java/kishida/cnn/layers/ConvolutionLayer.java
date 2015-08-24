@@ -43,7 +43,7 @@ public class ConvolutionLayer extends ImageNeuralLayer {
                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6)
-                        / size / size / channel + .5).toArray();
+                        / size / size / channel).toArray();
         this.bias = DoubleStream.generate(() -> 0).limit(filterCount).toArray();
         this.stride = stride;
         this.filterSize = size;

@@ -92,7 +92,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
                     }
                     int chxy = ch * outputWidth * outputHeight + x * outputHeight + y;
                     newDelta[ch * inputWidth * inputHeight + maxX * inputHeight + maxY] +=
-                            result[chxy] * delta[chxy];
+                             delta[chxy];
                 }
             }
         });

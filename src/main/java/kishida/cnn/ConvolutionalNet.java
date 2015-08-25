@@ -47,13 +47,13 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.0001;
+    private static final double ep = 0.001;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
-    private static final int FILTER_1ST = 48;
-    private static final int FILTER_2ND = 96;
-    private static final int FULL_1ST = 1024;
+    private static final int FILTER_1ST = 96;
+    private static final int FILTER_2ND = 256;
+    private static final int FULL_1ST = 4096;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
@@ -162,14 +162,14 @@ public class ConvolutionalNet {
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
         layers.add(pre = new MultiNormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
 
-        //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
-        //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
-        //layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
-        //layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        //layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
+        layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
 
         //全結合1
         FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new RetifierdLinear(), ep);

@@ -6,6 +6,8 @@
 package kishida.cnn.layers;
 
 import com.amd.aparapi.Kernel;
+import java.util.Arrays;
+import java.util.DoubleSummaryStatistics;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import kishida.cnn.ConvolutionalNet;
@@ -42,7 +44,7 @@ public class ConvolutionLayer extends ImageNeuralLayer {
                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
                         ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6)
+                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble())
                         / size / size / channel).toArray();
         this.bias = DoubleStream.generate(() -> 0).limit(filterCount).toArray();
         this.stride = stride;
@@ -105,9 +107,12 @@ public class ConvolutionLayer extends ImageNeuralLayer {
 
     @Override
     public String toString() {
-        return String.format("Convolutional:%s filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d",
+        DoubleSummaryStatistics sum = Arrays.stream(filter).summaryStatistics();
+        return String.format("Convolutional:%s filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d%n"
+                + "Filter %.2f-%.2f ave:%.2f filtertotal:%.2f",
                 name, filterSize, filterSize, outputChannels, stride,
-                inputWidth, inputHeight, inputChannels, outputWidth, outputHeight, outputChannels);
+                inputWidth, inputHeight, inputChannels, outputWidth, outputHeight, outputChannels,
+                sum.getMin(), sum.getMax(), sum.getAverage(), sum.getSum() / inputChannels / outputChannels);
     }
 
 }

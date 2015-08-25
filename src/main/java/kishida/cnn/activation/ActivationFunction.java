@@ -5,15 +5,15 @@
  */
 package kishida.cnn.activation;
 
-import java.util.Arrays;
-
 /** 活性化関数 */
 public abstract class ActivationFunction {
 
     public abstract double apply(double value);
 
-    public double[] applyAfter(double[] values) {
-        return Arrays.stream(values).map(this::apply).toArray();
+    public void applyAfter(double[] values) {
+        for(int i = 0; i < values.length; ++i){
+            values[i] = apply(values[i]);
+        }
     }
 
     /** 微分 */

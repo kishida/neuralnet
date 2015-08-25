@@ -46,7 +46,7 @@ public class ConvolutionForwardKernel extends Kernel {
                 }
             }
         }
-        result[fxy] += r + bias[f];
+        result[fxy] = r + bias[f];
     }
     double[] result;
     double[] input;
@@ -62,7 +62,7 @@ public class ConvolutionForwardKernel extends Kernel {
     double[] bias;
 
     public double[] forward(double[] input, int inputChannels, int inputWidth, int inputHeight,
-            double[] filter, int outputChannels, int outputWidth, int outputHeight,
+            double[] filter, int outputChannels, int outputWidth, int outputHeight, double[] result,
             int filterSize, int stride, double[] bias, ActivationFunction activation, boolean useGpu) {
         this.input = input;
         this.inputChannels = inputChannels;
@@ -75,7 +75,7 @@ public class ConvolutionForwardKernel extends Kernel {
         this.filterSize = filterSize;
         this.stride = stride;
         this.bias = bias;
-        result = new double[outputChannels * outputWidth * outputHeight];
+        this.result = result;
         if (useGpu) {
             put(input);
             put(filter);

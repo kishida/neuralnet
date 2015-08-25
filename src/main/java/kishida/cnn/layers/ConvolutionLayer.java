@@ -48,15 +48,19 @@ public class ConvolutionLayer extends ImageNeuralLayer {
         this.stride = stride;
         this.filterSize = size;
         this.useGpu = useGpu;
+        this.result = new double[outputChannels * outputWidth * outputHeight];
+        this.biasDelta = new double[result.length];
     }
 
     /** 畳み込みフィルタを適用する */
     @Override
     public double[] forward(double[] img) {
         result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
-                filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, activation, useGpu);
+                filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias, activation, useGpu);
         return result;
     }
+
+    double[] biasDelta;
 
     /** 畳み込み層の学習 */
     @Override
@@ -70,7 +74,7 @@ public class ConvolutionLayer extends ImageNeuralLayer {
                     input, inputChannels, inputWidth, inputHeight,
                     filter, outputChannels, outputWidth, outputHeight, filterSize, stride, ep, useGpu);
             ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result,
-                    outputChannels, outputWidth, outputHeight, bias, ep, useGpu);
+                    outputChannels, outputWidth, outputHeight, bias, ep, biasDelta, useGpu);
             if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {

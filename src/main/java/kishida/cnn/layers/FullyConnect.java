@@ -74,7 +74,7 @@ public class FullyConnect extends NeuralLayer {
             }
             result[j] += bias[j];
         });
-        result = activation.applyAfter(result);
+        activation.applyAfter(result);
         if (!Arrays.stream(result).allMatch(Double::isFinite)) {
             System.out.println("there is infinite value");
             System.out.println(Arrays.toString(result));

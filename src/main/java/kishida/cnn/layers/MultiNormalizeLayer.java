@@ -24,6 +24,9 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
         this.size = size;
         this.threshold = threshold;
         this.useGpu = useGpu;
+        averages = new double[inputWidth * inputHeight];
+        rates = new double[inputWidth * inputHeight];
+        result = new double[inputChannels * inputHeight * inputWidth];
     }
 
     double[] averages;
@@ -34,9 +37,6 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
 
     @Override
     public double[] forward(double[] in) {
-        averages = new double[inputWidth * inputHeight];
-        rates = new double[inputWidth * inputHeight];
-        result = new double[in.length];
 
         IntStream.range(0, inputWidth).parallel().forEach(x -> {
             for(int y = 0; y < inputHeight; ++y){

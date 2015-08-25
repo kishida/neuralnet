@@ -6,6 +6,7 @@
 package kishida.cnn.activation;
 
 import java.util.Arrays;
+import java.util.stream.IntStream;
 
 /** ソフトマックス */
 public class SoftMaxFunction extends ActivationFunction {
@@ -16,11 +17,12 @@ public class SoftMaxFunction extends ActivationFunction {
     }
 
     @Override
-    public double[] applyAfter(double[] values) {
+    public void applyAfter(double[] values) {
         double total = Arrays.stream(values).parallel()
                 .map((double d) -> Math.exp(Math.min(700, d))).sum();
-        return Arrays.stream(values).parallel()
-                .map((double d) -> Math.exp(Math.min(700, d)) / total).toArray();
+        IntStream.range(0, values.length).parallel().forEach(i -> {
+            values[i] = Math.exp(Math.min(700, values[i])) / total;
+        });
     }
 
     @Override

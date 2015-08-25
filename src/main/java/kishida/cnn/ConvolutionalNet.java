@@ -47,7 +47,7 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.001;
+    private static final double ep = 0.0001;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
@@ -185,6 +185,7 @@ public class ConvolutionalNet {
         Collections.shuffle(files, random);
         long start = System.currentTimeMillis();
         long[] pStart = {start};
+        double[] readData = new double[3 * IMAGE_SIZE * IMAGE_SIZE];
         for(Img img : files) {
             Path p = img.filename;
             String catName = p.getParent().getFileName().toString();
@@ -195,7 +196,7 @@ public class ConvolutionalNet {
 
             BufferedImage resized = img.readImage();
             //double[] readData = normalizeImage(imageToArray(resized));
-            double[] readData = imageToArray(resized);
+            imageToArray(resized, readData);
             for(int i = 0; i < readData.length; ++i){
                 readData[i] -= aveData[i];
             }
@@ -513,9 +514,14 @@ public class ConvolutionalNet {
     }
     /** 画像から配列へ変換 */
     private static double[] imageToArray(BufferedImage img) {
+        double[] imageData = new double[3 * img.getWidth() * img.getHeight()];
+        imageToArray(img, imageData);
+        return imageData;
+    }
+    /** 画像から配列へ変換 */
+    private static void imageToArray(BufferedImage img, double[] imageData) {
         int width = img.getWidth();
         int height = img.getHeight();
-        double[] imageData = new double[3 * width * height];
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
                 int rgb = img.getRGB(x, y);
@@ -525,7 +531,6 @@ public class ConvolutionalNet {
                 imageData[pos + 2 * width * height] = (rgb & 0xff) / 255.;
             }
         }
-        return imageData;
     }
     static double[] normalizeImage(double[] data){
         int size = data.length / 3;

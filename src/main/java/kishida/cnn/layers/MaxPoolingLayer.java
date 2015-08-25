@@ -5,6 +5,7 @@
  */
 package kishida.cnn.layers;
 
+import java.util.Arrays;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.LinearFunction;
 
@@ -27,12 +28,13 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
                 channels, inputWidth / stride, inputHeight / stride);
         this.size = size;
         this.stride = stride;
+        result = new double[outputChannels * outputWidth * outputHeight];
+        newDelta = new double[channels * inputWidth * inputHeight];
     }
 
     /** プーリング(max) */
     @Override
     public double[] forward(double[] data) {
-        result = new double[outputChannels * outputWidth * outputHeight];
         IntStream.range(0, inputChannels).parallel().forEach(ch -> {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int y = 0; y < outputHeight; ++y) {
@@ -60,9 +62,10 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
         return result;
     }
 
+    double[] newDelta;
     @Override
     public double[] backward(double[] in, double[] delta) {
-        double[] newDelta = new double[in.length];
+        Arrays.fill(newDelta, 0);
         IntStream.range(0, inputChannels).parallel().forEach(ch -> {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int y = 0; y < outputHeight; ++y) {

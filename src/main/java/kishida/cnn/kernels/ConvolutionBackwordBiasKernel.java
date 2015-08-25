@@ -36,11 +36,11 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
 
     public void backwordBias(double[] delta, double[] result,
             int outputChannels, int outputWidth, int outputHeight,
-            double[] bias, double ep, boolean useGpu) {
+            double[] bias, double ep, double[] biasDelta, boolean useGpu) {
         this.delta = delta;
         this.result = result;
         this.localEp = ep / (outputWidth * outputHeight);
-        this.biasDelta = new double[result.length];
+        this.biasDelta = biasDelta;
         if (useGpu) {
             put(delta);
             put(result);

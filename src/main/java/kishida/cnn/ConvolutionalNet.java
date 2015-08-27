@@ -49,11 +49,11 @@ import kishida.cnn.layers.MultiNormalizeLayer;
 public class ConvolutionalNet {
     private static final double ep = 0.001;
     public static Random random = new Random(1234);
-    private static final boolean USE_GPU1 = true;
-    private static final boolean USE_GPU2 = true;
-    private static final int FILTER_1ST = 96;
-    private static final int FILTER_2ND = 256;
-    private static final int FULL_1ST = 4096;
+    private static final boolean USE_GPU1 = false;
+    private static final boolean USE_GPU2 = false;
+    private static final int FILTER_1ST = 48;
+    private static final int FILTER_2ND = 96;
+    private static final int FULL_1ST = 1024;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
@@ -104,6 +104,7 @@ public class ConvolutionalNet {
 
         List<Img> files = Files.walk(dir)
                 .filter(p -> !Files.isDirectory(p))
+                .filter(p -> !AVERAGE_PNG.equals(p.getFileName().toString()))
                 .filter(p -> !p.getParent().getFileName().toString().startsWith("_"))
                 /*
                 .flatMap(p -> IntStream.range(0, 3).mapToObj(i ->
@@ -116,7 +117,7 @@ public class ConvolutionalNet {
 
 
         // 画素ごとの平均をとる
-        Path avePath = dir.resolve("average.png");
+        Path avePath = dir.resolve(AVERAGE_PNG);
         BufferedImage aveImage;
         if(!Files.exists(avePath)){
             double[] aveData = new double[IMAGE_SIZE * IMAGE_SIZE * 3];
@@ -162,14 +163,14 @@ public class ConvolutionalNet {
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
         layers.add(pre = new MultiNormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
 
-        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
+        //layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
 
         //全結合1
         FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new RetifierdLinear(), ep);
@@ -282,6 +283,7 @@ public class ConvolutionalNet {
         System.out.printf("%.2fm%n", (end - start) / 1000. / 60);
         }
     }
+    public static final String AVERAGE_PNG = "average.png";
 
     static Image createGraph(int width, int height, double[] data){
         BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);

@@ -46,10 +46,10 @@ public class AutoEncoder {
         Path filename;
         boolean inverse;
     }
-    
+
     public static void main(String[] args) {
         JFrame f = new JFrame("自己符号化器");
-        
+
         f.setSize(600, 400);
         f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.setLayout(new GridLayout(3, 1));
@@ -72,7 +72,7 @@ public class AutoEncoder {
                 .mapToObj(i -> new JLabel())
                 .peek(bottom::add)
                 .toArray(i -> new JLabel[i]);
-        
+
         Path dir = Paths.get("C:\\Users\\naoki\\Desktop\\sampleimg");
         new Thread(() -> {
             double[][][][] filters = new double[48][][][];
@@ -88,7 +88,7 @@ public class AutoEncoder {
                     createRandomFilter(11),createRandomFilter(11),createRandomFilter(11)
                 };
             }
-            
+
             for(int i = 0; i < filters.length; ++i){
                 labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
             }
@@ -116,7 +116,7 @@ public class AutoEncoder {
                         double[][][] inverseImage = applyInverseFilter(filtered, outfilters, stride);
                         right.setIcon(new ImageIcon(arrayToImage(inverseImage)));
                         double[][][] delta = supervisedLearn(inverseImage, resizedImage, outfilters, filtered, stride);
-                        convolutionalLearn(delta, filters, bias, resizedImage, stride);
+                        convolutionalLearn(delta, filters, bias, resizedImage, filtered, stride);
                         for(int i = 0; i < filters.length; ++i){
                             labels[i].setIcon(new ImageIcon(resize(arrayToImage(filters[i]), 44, 44)));
                             labels[i].setText(String.format("%.3f", bias[i]));
@@ -127,15 +127,15 @@ public class AutoEncoder {
                     } catch (IOException ex) {
                         Logger.getLogger(AutoEncoder.class.getName()).log(Level.SEVERE, null, ex);
                     }
-                    
+
                 });
             } catch (IOException ex) {
                 Logger.getLogger(AutoEncoder.class.getName()).log(Level.SEVERE, null, ex);
             }
         }).start();
     }
-    
-    static double[][][] supervisedLearn(double[][][] data, double[][][] superviser, double[][][][] filters, double[][][] filtered, int step){
+
+    static double[][][] supervisedLearn(double[][][] data, double[][][] superviser, double[][][][] filters, double[][][] input, int step){
         int width = Math.min(data[0].length, superviser[0].length);
         int height = Math.min(data[0][0].length, superviser[0][0].length);
         double[][][][] oldfilter = new double[filters.length][filters[0].length][filters[0][0].length][];
@@ -145,8 +145,9 @@ public class AutoEncoder {
                     oldfilter[f][ch][i] = Arrays.copyOf(filters[f][ch][i], filters[f][ch][i].length);
                 }
             }
-        }        
-        double[][][]delta = new double[filtered.length][filtered[0].length][filtered[0][0].length];
+        }
+        double localEp = ep / filters[0].length / filters[0].length;
+        double[][][]delta = new double[input.length][input[0].length][input[0][0].length];
         IntStream.range(0, filters.length).parallel().forEach(f -> {
             for(int lx = 0; lx < width / step; ++lx){
                 int x = lx;
@@ -168,9 +169,9 @@ public class AutoEncoder {
                                 double c2 = data[ch][xx][yy];
                                 //if(c1 < -1) c1 = -1; if(c1 > 1) c1 = 1;
                                 //if(c2 < -1) c2 =-1; if(c2 > 1) c2 = 1;
-                                double d = (c2 - c1) * (filtered[f][x][y] > 0 ? 1 : 0) * oldfilter[f][ch][i][j];
+                                double d = (c2 - c1) * (data[ch][xx][yy] > 0 ? 1 : 0) * oldfilter[f][ch][i][j];
                                 delta[f][x][y] += d;
-                                filters[f][ch][i][j] += d * ep;
+                                filters[f][ch][i][j] += d * input[f][x][y] * localEp;
                             }
                         }
                     }
@@ -179,9 +180,9 @@ public class AutoEncoder {
         });
         return delta;
     }
-    
+
     /** 畳み込み層の学習 */
-    static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[] bias, double[][][] input, int step ){
+    static void convolutionalLearn(double[][][] delta, double[][][][] filters, double[] bias, double[][][] input, double[][][] result, int step ){
         double[][][][] oldfilter = new double[filters.length][filters[0].length][filters[0][0].length][];
         for(int f = 0; f < filters.length; ++f){
             for(int ch = 0; ch < filters[f].length; ++ch){
@@ -189,7 +190,8 @@ public class AutoEncoder {
                     oldfilter[f][ch][i] = Arrays.copyOf(filters[f][ch][i], filters[f][ch][i].length);
                 }
             }
-        }        
+        }
+        double localep = ep / filters[0][0][0].length /filters[0][0][0].length;
         IntStream.range(0, filters.length).parallel().forEach(f -> {
             for(int ch = 0; ch < filters[0].length; ++ch){
                 for(int x = 0; x < input[0].length / step; ++x){
@@ -204,8 +206,8 @@ public class AutoEncoder {
                                 if(yy < 0 || yy >= input[0][0].length){
                                     continue;
                                 }
-                                double d = (input[ch][xx][yy] > 0 ? 1 : 0) * delta[f][x][y] * oldfilter[f][ch][i][j];
-                                filters[f][ch][i][j] += d * ep;
+                                double d = (result[f][x][y] > 0 ? 1 : 0) * delta[f][x][y] * oldfilter[f][ch][i][j];
+                                filters[f][ch][i][j] += d * input[ch][xx][yy] * localep;
                             }
                         }
                         bias[f] += ep * delta[f][x][y];
@@ -214,7 +216,7 @@ public class AutoEncoder {
             }
         });
     }
-    
+
     private static BufferedImage resize(BufferedImage imgRead, int width, int height) {
         return resize(imgRead, width, height, false);
     }
@@ -231,12 +233,12 @@ public class AutoEncoder {
             g.drawImage(imgRead, width, 0, -width, height, null);
         }else{
             g.drawImage(imgRead, 0, 0, width, height, null);
-            
+
         }
         g.dispose();
         return img;
-    }    
-    
+    }
+
     /** 画像から配列へ変換 */
     private static double[][][] imageToArray(BufferedImage img) {
         int width = img.getWidth();
@@ -251,8 +253,8 @@ public class AutoEncoder {
             }
         }
         return imageData;
-    }    
-    
+    }
+
     static Random r = new Random();
     static double[][] createRandomFilter(int size){
         double [][] result = new double[size][size];
@@ -263,10 +265,10 @@ public class AutoEncoder {
                 total += result[i][j];
             }
         }
-        
+
         return result;
     }
-    
+
     /** 値のクリッピング */
     static int clip(double c){
         if(c < 0) return 0;
@@ -294,7 +296,7 @@ public class AutoEncoder {
                                 if(yy < 0 || yy >= height){
                                     continue;
                                 }
-                                result[fi][x][y] += img[ch][xx][yy] * 
+                                result[fi][x][y] += img[ch][xx][yy] *
                                         filter[fi][ch][i][j];
                             }
                         }
@@ -329,7 +331,7 @@ public class AutoEncoder {
                                 continue;
                             }
                             for(int fi = 0; fi < filter.length; ++fi){
-                                result[ch][xx][yy] += img[ch][x][y] * 
+                                result[ch][xx][yy] += img[ch][x][y] *
                                         filter[fi][ch][i][j];
                             }
                         }
@@ -339,8 +341,8 @@ public class AutoEncoder {
         });
         return result;
     }
-        
-    
+
+
     static BufferedImage arrayToImage(double[][][] filteredData) {
         BufferedImage filtered = new BufferedImage(
                 filteredData[0].length, filteredData[0][0].length,
@@ -354,5 +356,5 @@ public class AutoEncoder {
             }
         }
         return filtered;
-    }        
+    }
 }

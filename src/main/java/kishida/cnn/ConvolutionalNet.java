@@ -154,14 +154,14 @@ public class ConvolutionalNet {
         layers.add(pre = new MaxPoolingLayer("pool1", 3, 2, pre));
         //一段目の正規化
         //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
-        layers.add(pre = new MultiNormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
+        layers.add(pre = new MultiNormalizeLayer("norm1", 5, .000001, pre, USE_GPU1));
         //二段目
         layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, ep, USE_GPU2));
         //二段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool2", 3, 2, pre));
 
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
-        layers.add(pre = new MultiNormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
+        layers.add(pre = new MultiNormalizeLayer("norm2", 5, .000001, pre, USE_GPU2));
 
         //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
         //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));

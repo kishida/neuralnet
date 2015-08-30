@@ -36,6 +36,13 @@ public abstract class NeuralLayer {
 
     public abstract double[] backward(double[] in, double[] delta);
 
+    public void prepareBatch(){
+        // do nothing as default
+    }
+    public void joinBatch(){
+        // do nothing as default
+    }
+
     public String getName() {
         return name;
     }

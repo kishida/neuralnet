@@ -55,6 +55,8 @@ public class FullyConnect extends NeuralLayer {
         this.out = out;
         this.weight = weight;
         this.bias = bias;
+        this.weightDelta = new double[in][out];
+        this.biasDelta = new double[out];
         this.localEp = localEp;
         this.dropout = IntStream.generate(() -> 1).limit(out).toArray();
         this.dropoutRate = dropoutRate;
@@ -99,13 +101,31 @@ public class FullyConnect extends NeuralLayer {
                 }
                 double d = diffed[j] * delta[j];
                 newDelta[i] += d * in[i] * weight[i][j];
-                weight[i][j] += d * in[i] * localEp;
+                weightDelta[i][j] += d * in[i] * localEp;
             }
         });
         IntStream.range(0, out).parallel().filter((j) -> dropout[j] == 1).forEach((j) -> {
-            bias[j] += diffed[j] * delta[j] * localEp;
+            biasDelta[j] += diffed[j] * delta[j] * localEp;
         });
         return newDelta;
+    }
+
+    @Override
+    public void prepareBatch() {
+        Arrays.stream(weightDelta).forEach(row -> Arrays.fill(row, 0));
+        Arrays.fill(biasDelta, 0);
+    }
+
+    @Override
+    public void joinBatch() {
+        IntStream.range(0, weight.length).parallel().forEach(i -> {
+            for(int j = 0; j < weight[i].length; ++j){
+                weight[i][j] += weightDelta[i][j];
+            }
+        });
+        IntStream.range(0, bias.length).parallel().forEach(i -> {
+            bias[i] += biasDelta[i];
+        });
     }
 
     @Override

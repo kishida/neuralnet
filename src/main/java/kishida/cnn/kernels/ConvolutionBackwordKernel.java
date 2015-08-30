@@ -42,15 +42,14 @@ public class ConvolutionBackwordKernel extends Kernel {
                             int fcij = f * inputChannels * filterSize * filterSize +
                                     ch * filterSize * filterSize + i * filterSize + j;
                             tempDelta[f * inputChannels * inputWidth * inputHeight +
-                                    ch * inputWidth * inputHeight + xx * inputHeight + yy] += dxinp * oldfilter[fcij];
-                            filter[fcij] += dxinp * localEp;
+                                    ch * inputWidth * inputHeight + xx * inputHeight + yy] += dxinp * filter[fcij];
+                            filterDelta[fcij] += dxinp * localEp;
                         }
                     }
                 }
             }
         }
-        //bias[f] += localEp * d;
-        biasDelta[fxy] = localEp * d;
+        tempBiasDelta[fxy] = localEp * d;
     }
     double[] input;
     double[] result;
@@ -65,14 +64,17 @@ public class ConvolutionBackwordKernel extends Kernel {
     int stride;
     double[] bias;
     double[] delta;
-    double[] oldfilter;
+    //double[] oldfilter;
     double localEp;
     double[] tempDelta;
+    double[] filterDelta;
     double[] biasDelta;
+    double[] tempBiasDelta;
 
     public double[] backward(double[] delta, double[] result,
             double[] input, int inputChannels, int inputWidth, int inputHeight,
             double[] filter, int outputChannels, int outputWidth, int outputHeight,
+            double[] filterDelta, double[] biasDelta,
             int filterSize, int stride, double[] bias, double ep, boolean useGpu) {
         this.delta = delta;
         this.input = input;
@@ -87,21 +89,23 @@ public class ConvolutionBackwordKernel extends Kernel {
         this.stride = stride;
         this.bias = bias;
         this.result = result;
-        this.oldfilter = Arrays.copyOf(filter, filter.length);
+        //this.oldfilter = Arrays.copyOf(filter, filter.length);
         this.tempDelta = new double[outputChannels * inputChannels * inputWidth * inputHeight];
         this.localEp = ep / (outputWidth * outputHeight);
-        this.biasDelta = Arrays.copyOf(result, result.length);
+        this.biasDelta = biasDelta;
+        this.filterDelta = filterDelta;
+        this.tempBiasDelta = Arrays.copyOf(result, result.length);
         if (useGpu) {
             put(filter);
             put(delta);
-            put(oldfilter);
+            put(filterDelta);
             put(input);
             put(result);
             put(tempDelta);
             execute(outputChannels * outputWidth * outputHeight);
-            get(filter);
+            get(filterDelta);
             get(tempDelta);
-            get(biasDelta);
+            get(tempBiasDelta);
         } else {
             IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
@@ -115,7 +119,7 @@ public class ConvolutionBackwordKernel extends Kernel {
                 newDelta[chxy] += tempDelta[f * inputChannels * inputWidth * inputHeight + chxy];
             }
             for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
-                bias[f] += biasDelta[f * outputWidth * outputHeight + xy];
+                biasDelta[f] += tempBiasDelta[f * outputWidth * outputHeight + xy];
             }
         });
         return newDelta;

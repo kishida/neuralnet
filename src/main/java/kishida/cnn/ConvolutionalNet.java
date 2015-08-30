@@ -47,13 +47,13 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.001;
+    private static final double ep = 0.0001;
     public static Random random = new Random(1234);
-    private static final boolean USE_GPU1 = false;
-    private static final boolean USE_GPU2 = false;
-    private static final int FILTER_1ST = 48;
-    private static final int FILTER_2ND = 96;
-    private static final int FULL_1ST = 1024;
+    private static final boolean USE_GPU1 = true;
+    private static final boolean USE_GPU2 = true;
+    private static final int FILTER_1ST = 96;
+    private static final int FILTER_2ND = 256;
+    private static final int FULL_1ST = 4096;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
@@ -163,14 +163,14 @@ public class ConvolutionalNet {
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
         layers.add(pre = new MultiNormalizeLayer("norm2", 5, .000001, pre, USE_GPU2));
 
-        //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
-        //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
-        //layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
-        //layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
+        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        //layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
+        layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
 
         //全結合1
         FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new RetifierdLinear(), ep);
@@ -237,25 +237,7 @@ public class ConvolutionalNet {
             historyLabel.setIcon(new ImageIcon(lineGraph));
             //一段目のフィルタの表示
             ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
-            for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
-                        conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
-            }
-            //フィルタ後の表示
-            for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(
-                        conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
-            }
-            ImageNeuralLayer pool1 = (ImageNeuralLayer) layers.get(2);
-            for(int i = 0; i < pool1.getOutputChannels(); ++i){
-                pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
-                        pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
-            }
-            ImageNeuralLayer norm1 = (ImageNeuralLayer) layers.get(3);
-            for(int i = 0; i < Math.min(normedLabel.length, norm1.getOutputChannels()); ++i){
-                normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
-                        norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
-            }
+
             //全結合一段の表示
             firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
             //全結合二段の表示
@@ -270,12 +252,34 @@ public class ConvolutionalNet {
 
             count[0]++;
             if(count[0] >= 10){
+                layers.forEach(NeuralLayer::joinBatch);
+                for(int i = 0; i < conv1.getOutputChannels(); ++i){
+                    filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
+                            conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
+                }
+                //フィルタ後の表示
+                for(int i = 0; i < conv1.getOutputChannels(); ++i){
+                    filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(
+                            conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
+                }
+                ImageNeuralLayer pool1 = (ImageNeuralLayer) layers.get(2);
+                for(int i = 0; i < pool1.getOutputChannels(); ++i){
+                    pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                            pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
+                }
+                ImageNeuralLayer norm1 = (ImageNeuralLayer) layers.get(3);
+                for(int i = 0; i < Math.min(normedLabel.length, norm1.getOutputChannels()); ++i){
+                    normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                            norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
+                }
+
                 System.out.printf("%4d %.2f %s %s%n",
                         count[0], 10 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                         ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                         ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
                 count[0] = 0;
                 pStart[0] = System.currentTimeMillis();
+                layers.forEach(NeuralLayer::prepareBatch);
             }
         }
         long end = System.currentTimeMillis();

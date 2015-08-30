@@ -19,6 +19,8 @@ import kishida.cnn.activation.ActivationFunction;
 public class FullyConnect extends NeuralLayer {
     double[][] weight;
     double[] bias;
+    double[][] weightDelta;
+    double[] biasDelta;
     int out;
     int in;
     int[] dropout;
@@ -54,7 +56,7 @@ public class FullyConnect extends NeuralLayer {
         this.weight = weight;
         this.bias = bias;
         this.localEp = localEp;
-        dropout = IntStream.generate(() -> 1).limit(out).toArray();
+        this.dropout = IntStream.generate(() -> 1).limit(out).toArray();
         this.dropoutRate = dropoutRate;
         this.weight = weight;
         this.bias = bias;

@@ -27,23 +27,17 @@ public class FullyConnect extends NeuralLayer {
     double dropoutRate = 1;
     double localEp;
 
-    public FullyConnect(String name, NeuralLayer preLayer, int out, double dropoutRate, ActivationFunction activation, double ep) {
-        this(name, preLayer.getOutputSize(), out, dropoutRate, activation, ep);
+    public FullyConnect(String name, NeuralLayer preLayer, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep) {
+        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, ep);
         this.preLayer = preLayer;
     }
 
-    public FullyConnect(String name, int in, int out, double dropoutRate, ActivationFunction activation, double ep) {
+    public FullyConnect(String name, int in, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep) {
         this(name, in, out,
                 Stream.generate(() -> IntStream.range(0, out)// ここをparallelにすると、nextDoubleで同期化されて遅くなる
-                        .mapToDouble(d -> (
-                                ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() - 6) / in)
+                        .mapToDouble(d -> ConvolutionalNet.random.nextGaussian() * 0.01)
                         .toArray()).limit(in).toArray(double[][]::new),
-                DoubleStream.generate(() -> 0).limit(out).toArray()
+                DoubleStream.generate(() -> initBias).limit(out).toArray()
                 , dropoutRate, ep, activation);
     }
 

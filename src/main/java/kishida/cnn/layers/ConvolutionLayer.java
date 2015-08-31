@@ -30,27 +30,21 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     double ep;
 
     public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
-            int filterCount, int size, int stride, double ep, boolean useGpu) {
+            int filterCount, int size, int stride, double initBias, double ep, boolean useGpu) {
         this(name, preLayer, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth,
-                filterCount, size, stride, ep, useGpu);
+                filterCount, size, stride, initBias, ep, useGpu);
     }
 
     public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
-            int channel, int width, int height, int filterCount, int size, int stride, double ep, boolean useGpu) {
+            int channel, int width, int height, int filterCount, int size, int stride, double initBias, double ep, boolean useGpu) {
         super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
         this.ep = ep;
         this.preLayer = preLayer;
         this.filter = IntStream.range(0, size * size * channel * filterCount)
-                .mapToDouble(d -> (ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble() +
-                        ConvolutionalNet.random.nextDouble() + ConvolutionalNet.random.nextDouble())
-                        /6 / size / size / channel).toArray();
+                .mapToDouble(d -> ConvolutionalNet.random.nextGaussian() * 0.01).toArray();
         double sum = Arrays.stream(filter).sum() / filterCount;
         IntStream.range(0, filter.length).forEach(i -> filter[i] = filter[i] * .2 / sum);
-        this.bias = DoubleStream.generate(() -> 0).limit(filterCount).toArray();
+        this.bias = DoubleStream.generate(() -> initBias).limit(filterCount).toArray();
         this.filterDelta = new double[filter.length];
         this.biasDelta = new double[bias.length];
         this.stride = stride;

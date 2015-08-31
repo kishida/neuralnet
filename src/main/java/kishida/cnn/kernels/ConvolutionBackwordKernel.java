@@ -64,7 +64,6 @@ public class ConvolutionBackwordKernel extends Kernel {
     int stride;
     double[] bias;
     double[] delta;
-    //double[] oldfilter;
     double localEp;
     double[] tempDelta;
     double[] filterDelta;
@@ -89,7 +88,6 @@ public class ConvolutionBackwordKernel extends Kernel {
         this.stride = stride;
         this.bias = bias;
         this.result = result;
-        //this.oldfilter = Arrays.copyOf(filter, filter.length);
         this.tempDelta = new double[outputChannels * inputChannels * inputWidth * inputHeight];
         this.localEp = ep / (outputWidth * outputHeight);
         this.biasDelta = biasDelta;

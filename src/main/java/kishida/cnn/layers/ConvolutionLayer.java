@@ -22,6 +22,8 @@ import kishida.cnn.kernels.ConvolutionForwardKernel;
 public class ConvolutionLayer extends ImageNeuralLayer {
     double[] filter;
     double[] bias;
+    double[] filterDelta;
+    double[] biasDelta;
     int stride;
     int filterSize;
     boolean useGpu;
@@ -49,11 +51,13 @@ public class ConvolutionLayer extends ImageNeuralLayer {
         double sum = Arrays.stream(filter).sum() / filterCount;
         IntStream.range(0, filter.length).forEach(i -> filter[i] = filter[i] * .2 / sum);
         this.bias = DoubleStream.generate(() -> 0).limit(filterCount).toArray();
+        this.filterDelta = new double[filter.length];
+        this.biasDelta = new double[bias.length];
         this.stride = stride;
         this.filterSize = size;
         this.useGpu = useGpu;
         this.result = new double[outputChannels * outputWidth * outputHeight];
-        this.biasDelta = new double[result.length];
+        this.tempDelta = new double[result.length];
     }
 
     /** 畳み込みフィルタを適用する */
@@ -64,7 +68,7 @@ public class ConvolutionLayer extends ImageNeuralLayer {
         return result;
     }
 
-    double[] biasDelta;
+    double[] tempDelta;
 
     /** 畳み込み層の学習 */
     @Override
@@ -76,9 +80,9 @@ public class ConvolutionLayer extends ImageNeuralLayer {
                     filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
             ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result,
                     input, inputChannels, inputWidth, inputHeight,
-                    filter, outputChannels, outputWidth, outputHeight, filterSize, stride, ep, useGpu);
+                    filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, ep, useGpu);
             ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result,
-                    outputChannels, outputWidth, outputHeight, bias, ep, biasDelta, useGpu);
+                    outputChannels, outputWidth, outputHeight, biasDelta, ep, tempDelta, useGpu);
             if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
@@ -95,8 +99,22 @@ public class ConvolutionLayer extends ImageNeuralLayer {
             // CPUバージョン
             return ConvolutionBackwordKernel.INSTANCE.backward(delta, result,
                     input, inputChannels, inputWidth, inputHeight,
-                    filter, outputChannels, outputWidth, outputHeight, filterSize, stride, bias, ep, false);
+                    filter, outputChannels, outputWidth, outputHeight,
+                    filterDelta, biasDelta,
+                    filterSize, stride, bias, ep, false);
         }
+    }
+
+    @Override
+    public void prepareBatch() {
+        Arrays.fill(filterDelta, 0);
+        Arrays.fill(biasDelta, 0);
+    }
+
+    @Override
+    public void joinBatch(int count) {
+        IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] += filterDelta[i] / count);
+        IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i] / count);
     }
 
     public double[] getFilter() {

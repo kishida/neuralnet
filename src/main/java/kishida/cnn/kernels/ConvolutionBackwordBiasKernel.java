@@ -27,35 +27,35 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
     double[] result;
     double[] delta;
     double localEp;
-    double[] biasDelta;
+    double[] tempBiasDelta;
 
     private void proc(int fxy) {
         double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
-        biasDelta[fxy] = localEp * d;
+        tempBiasDelta[fxy] = localEp * d;
     }
 
     public void backwordBias(double[] delta, double[] result,
             int outputChannels, int outputWidth, int outputHeight,
-            double[] bias, double ep, double[] biasDelta, boolean useGpu) {
+            double[] bias, double ep, double[] tempBiasDelta, boolean useGpu) {
         this.delta = delta;
         this.result = result;
         this.localEp = ep / (outputWidth * outputHeight);
-        this.biasDelta = biasDelta;
+        this.tempBiasDelta = tempBiasDelta;
         if (useGpu) {
             put(delta);
             put(result);
             execute(outputChannels * outputWidth * outputHeight);
-            get(biasDelta);
+            get(tempBiasDelta);
             IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
-                    bias[f] += biasDelta[f * outputWidth * outputHeight + xy];
+                    bias[f] += tempBiasDelta[f * outputWidth * outputHeight + xy];
                 }
             });
         } else {
             IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
                     proc(f * outputWidth * outputHeight + xy);
-                    bias[f] += biasDelta[f * outputWidth * outputHeight + xy];
+                    bias[f] += tempBiasDelta[f * outputWidth * outputHeight + xy];
                 }
             });
         }

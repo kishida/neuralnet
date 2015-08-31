@@ -111,9 +111,11 @@ public class FullyConnect extends NeuralLayer {
     }
 
     @Override
-    public void prepareBatch() {
-        Arrays.stream(weightDelta).forEach(row -> Arrays.fill(row, 0));
-        Arrays.fill(biasDelta, 0);
+    public void prepareBatch(double momentam) {
+        Arrays.stream(weightDelta).parallel().forEach(row -> {
+            IntStream.range(0, row.length).forEach(i -> row[i] = row[i] * momentam);
+        });
+        IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
     }
 
     @Override

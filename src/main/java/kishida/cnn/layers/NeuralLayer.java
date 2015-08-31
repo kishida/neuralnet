@@ -36,7 +36,7 @@ public abstract class NeuralLayer {
 
     public abstract double[] backward(double[] in, double[] delta);
 
-    public void prepareBatch(){
+    public void prepareBatch(double momentam){
         // do nothing as default
     }
     public void joinBatch(int count){

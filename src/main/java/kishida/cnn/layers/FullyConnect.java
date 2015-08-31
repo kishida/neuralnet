@@ -117,14 +117,14 @@ public class FullyConnect extends NeuralLayer {
     }
 
     @Override
-    public void joinBatch() {
+    public void joinBatch(int count) {
         IntStream.range(0, weight.length).parallel().forEach(i -> {
             for(int j = 0; j < weight[i].length; ++j){
-                weight[i][j] += weightDelta[i][j];
+                weight[i][j] += weightDelta[i][j] / count;
             }
         });
         IntStream.range(0, bias.length).parallel().forEach(i -> {
-            bias[i] += biasDelta[i];
+            bias[i] += biasDelta[i] / count;
         });
     }
 

@@ -251,8 +251,8 @@ public class ConvolutionalNet {
             //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
 
             count[0]++;
-            if(count[0] >= 10){
-                layers.forEach(NeuralLayer::joinBatch);
+            if(count[0] >= 25){
+                layers.forEach(layer -> layer.joinBatch(25));
                 for(int i = 0; i < conv1.getOutputChannels(); ++i){
                     filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
                             conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
@@ -274,7 +274,7 @@ public class ConvolutionalNet {
                 }
 
                 System.out.printf("%4d %.2f %s %s%n",
-                        count[0], 10 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
+                        count[0], 25 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                         ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                         ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
                 count[0] = 0;

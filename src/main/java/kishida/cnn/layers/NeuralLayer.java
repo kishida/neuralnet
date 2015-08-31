@@ -39,7 +39,7 @@ public abstract class NeuralLayer {
     public void prepareBatch(){
         // do nothing as default
     }
-    public void joinBatch(){
+    public void joinBatch(int count){
         // do nothing as default
     }
 

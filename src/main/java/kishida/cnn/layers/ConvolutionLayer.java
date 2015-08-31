@@ -112,9 +112,9 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     }
 
     @Override
-    public void joinBatch() {
-        IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] += filterDelta[i]);
-        IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i]);
+    public void joinBatch(int count) {
+        IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] += filterDelta[i] / count);
+        IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i] / count);
     }
 
     public double[] getFilter() {

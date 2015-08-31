@@ -47,19 +47,20 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.0001;
+    private static final double ep = 0.001;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
-    private static final int FILTER_1ST = 96;
-    private static final int FILTER_2ND = 256;
-    private static final int FULL_1ST = 4096;
+    private static final int FILTER_1ST = 48;
+    private static final int FILTER_2ND = 96;
+    private static final int FULL_1ST = 1024;
     private static final int FILTER_1ST_SIZE = 11;
     //static final int FILTER_1ST = 48;
     //static final int FILTER_2ND = 96;
     private static final int FILTER_ROWS = 8;//Math.max((int)Math.sqrt(FILTER_1ST), 1);
     private static final int FILTER_COLS = 12;//FILTER_1ST / h;
     private static final int IMAGE_SIZE = 227;
+    private static final int MINI_BATCH = 25;
     static class Img{
 
         public Img(Path filename, boolean inverse, int x, int y) {
@@ -163,14 +164,14 @@ public class ConvolutionalNet {
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
         layers.add(pre = new MultiNormalizeLayer("norm2", 5, .000001, pre, USE_GPU2));
 
-        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
-        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
+        //layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, ep, USE_GPU1));
+        //layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
+        //layers.add(npre = new FullyConnect("fc0", npre, 4096, .5, new RetifierdLinear(), ep));
 
         //全結合1
         FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 0.5, new RetifierdLinear(), ep);
@@ -251,8 +252,8 @@ public class ConvolutionalNet {
             //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
 
             count[0]++;
-            if(count[0] >= 25){
-                layers.forEach(layer -> layer.joinBatch(25));
+            if(count[0] >= MINI_BATCH){
+                layers.forEach(layer -> layer.joinBatch(MINI_BATCH));
                 for(int i = 0; i < conv1.getOutputChannels(); ++i){
                     filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
                             conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
@@ -274,7 +275,7 @@ public class ConvolutionalNet {
                 }
 
                 System.out.printf("%4d %.2f %s %s%n",
-                        count[0], 25 * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
+                        count[0], MINI_BATCH * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                         ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                         ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
                 count[0] = 0;

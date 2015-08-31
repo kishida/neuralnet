@@ -106,9 +106,9 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     }
 
     @Override
-    public void prepareBatch() {
-        Arrays.fill(filterDelta, 0);
-        Arrays.fill(biasDelta, 0);
+    public void prepareBatch(double momentam) {
+        IntStream.range(0, filterDelta.length).parallel().forEach(i -> filterDelta[i] = filterDelta[i] * momentam);
+        IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
     }
 
     @Override

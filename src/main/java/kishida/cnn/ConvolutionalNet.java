@@ -47,7 +47,7 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.001;
+    private static final double ep = 0.0005;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
@@ -61,6 +61,7 @@ public class ConvolutionalNet {
     private static final int FILTER_COLS = 12;//FILTER_1ST / h;
     private static final int IMAGE_SIZE = 227;
     private static final int MINI_BATCH = 25;
+    private static final double MOMENTAM = 0.9;
     static class Img{
 
         public Img(Path filename, boolean inverse, int x, int y) {
@@ -280,7 +281,7 @@ public class ConvolutionalNet {
                         ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
                 count[0] = 0;
                 pStart[0] = System.currentTimeMillis();
-                layers.forEach(NeuralLayer::prepareBatch);
+                layers.forEach(layer -> layer.prepareBatch(MOMENTAM));
             }
         }
         long end = System.currentTimeMillis();

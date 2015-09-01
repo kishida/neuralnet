@@ -94,7 +94,7 @@ public class FullyConnect extends NeuralLayer {
                     continue;
                 }
                 double d = diffed[j] * delta[j];
-                newDelta[i] += d * in[i] * weight[i][j];
+                newDelta[i] += d *  weight[i][j];//in[i] *;
                 weightDelta[i][j] += d * in[i] * localEp;
             }
         });

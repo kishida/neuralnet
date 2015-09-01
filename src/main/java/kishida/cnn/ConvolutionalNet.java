@@ -40,6 +40,7 @@ import javax.swing.JTabbedPane;
 import kishida.cnn.activation.RetifierdLinear;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
+import kishida.cnn.layers.LerningLayer;
 import kishida.cnn.layers.MultiNormalizeLayer;
 
 /**
@@ -279,6 +280,23 @@ public class ConvolutionalNet {
                         count[0], MINI_BATCH * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                         ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                         ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
+
+                for(NeuralLayer layer : layers){
+                    System.out.printf("%s result: %.2f～%.2f average %.2f ", layer.getName(),
+                            layer.getResultStatistics().getMin(),
+                            layer.getResultStatistics().getMax(),
+                            layer.getResultStatistics().getAverage());
+                    if(layer instanceof LerningLayer){
+                        DoubleSummaryStatistics ws = ((LerningLayer)layer).getWeightStatistics();
+                        System.out.printf("weight: %.2f～%.2f average %.2f ",
+                                ws.getMin(), ws.getMax(), ws.getAverage());
+                        DoubleSummaryStatistics bs = ((LerningLayer)layer).getBiasStatistics();
+                        System.out.printf("bias: %.2f～%.2f average %.2f ",
+                                bs.getMin(), bs.getMax(), bs.getAverage());
+                    }
+                    System.out.println();
+                }
+
                 count[0] = 0;
                 pStart[0] = System.currentTimeMillis();
                 layers.forEach(layer -> layer.prepareBatch(MOMENTAM));

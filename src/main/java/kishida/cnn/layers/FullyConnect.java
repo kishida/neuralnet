@@ -6,6 +6,7 @@
 package kishida.cnn.layers;
 
 import java.util.Arrays;
+import java.util.DoubleSummaryStatistics;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -16,7 +17,7 @@ import kishida.cnn.activation.ActivationFunction;
  *
  * @author naoki
  */
-public class FullyConnect extends NeuralLayer {
+public class FullyConnect extends NeuralLayer implements LerningLayer{
     double[][] weight;
     double[] bias;
     double[][] weightDelta;
@@ -59,14 +60,14 @@ public class FullyConnect extends NeuralLayer {
     }
 
     public void prepareDropout() {
-        dropout = ConvolutionalNet.random.doubles(out).mapToInt((d) -> d < dropoutRate ? 1 : 0).toArray();
+        dropout = ConvolutionalNet.random.doubles(out).mapToInt(d -> d < dropoutRate ? 1 : 0).toArray();
     }
 
     @Override
     public double[] forward(double[] in) {
         prepareDropout();
         result = new double[out];
-        IntStream.range(0, out).parallel().filter((j) -> dropout[j] == 1).forEach((j) -> {
+        IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
             for (int i = 0; i < in.length; ++i) {
                 result[j] += in[i] * weight[i][j];
             }
@@ -98,7 +99,7 @@ public class FullyConnect extends NeuralLayer {
                 weightDelta[i][j] += d * in[i] * localEp;
             }
         });
-        IntStream.range(0, out).parallel().filter((j) -> dropout[j] == 1).forEach((j) -> {
+        IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
             biasDelta[j] += diffed[j] * delta[j] * localEp;
         });
         return newDelta;
@@ -136,6 +137,16 @@ public class FullyConnect extends NeuralLayer {
     @Override
     public String toString() {
         return String.format("Fully connect:%s %d->%d dropout:%.2f", name, in, out, dropoutRate);
+    }
+
+    @Override
+    public DoubleSummaryStatistics getWeightStatistics() {
+        return Arrays.stream(weight).flatMapToDouble(Arrays::stream).summaryStatistics();
+    }
+
+    @Override
+    public DoubleSummaryStatistics getBiasStatistics() {
+        return Arrays.stream(bias).summaryStatistics();
     }
 
 }

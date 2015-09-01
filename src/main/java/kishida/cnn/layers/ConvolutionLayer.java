@@ -19,7 +19,7 @@ import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 
 /** 畳み込み層 */
-public class ConvolutionLayer extends ImageNeuralLayer {
+public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     double[] filter;
     double[] bias;
     double[] filterDelta;
@@ -59,7 +59,35 @@ public class ConvolutionLayer extends ImageNeuralLayer {
     public double[] forward(double[] img) {
         result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
                 filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias, activation, useGpu);
+        localNormalization(result);
         return result;
+    }
+
+    private void localNormalization(double[] result){
+        final int n = 5;
+        final int k = 2;
+        final double a = 0.0001;
+        final double b = 0.75;
+        // resultをコピーするほうが楽だけど、メモリを節約するため
+        final double[] sigma = new double[n];
+        for(int x = 0; x < outputWidth; ++x){
+            for(int y = 0; y < outputHeight; ++y){
+                int xy = x * outputHeight + y;
+                Arrays.fill(sigma, 0);
+                int lp = 0;
+                for(; lp < n / 2; ++lp){
+                    sigma[lp] = result[lp * outputWidth * outputHeight + xy] * result[lp * outputWidth * outputHeight + xy];
+                }
+                for(int ch = 0; ch < outputChannels; ++ch){
+                    sigma[lp % 5] = lp >= outputChannels ? 0 :
+                            result[lp * outputWidth * outputHeight + xy] * result[lp * outputWidth * outputHeight + xy];
+                    lp = lp + 1;
+                    double sum = Arrays.stream(sigma).sum();
+                    result[ch * outputWidth * outputHeight + xy] = result[ch * outputWidth * outputHeight + xy] /
+                            Math.pow(k + a * sum, b);
+                }
+            }
+        }
     }
 
     double[] tempDelta;
@@ -127,6 +155,16 @@ public class ConvolutionLayer extends ImageNeuralLayer {
                 name, filterSize, filterSize, outputChannels, stride,
                 inputWidth, inputHeight, inputChannels, outputWidth, outputHeight, outputChannels,
                 sum.getMin(), sum.getMax(), sum.getAverage(), sum.getSum() / inputChannels / outputChannels);
+    }
+
+    @Override
+    public DoubleSummaryStatistics getWeightStatistics() {
+        return Arrays.stream(filter).summaryStatistics();
+    }
+
+    @Override
+    public DoubleSummaryStatistics getBiasStatistics() {
+        return Arrays.stream(bias).summaryStatistics();
     }
 
 }

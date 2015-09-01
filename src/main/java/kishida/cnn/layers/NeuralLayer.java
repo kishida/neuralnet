@@ -5,6 +5,8 @@
  */
 package kishida.cnn.layers;
 
+import java.util.Arrays;
+import java.util.DoubleSummaryStatistics;
 import java.util.Objects;
 import kishida.cnn.activation.ActivationFunction;
 
@@ -52,5 +54,8 @@ public abstract class NeuralLayer {
     }
 
     public abstract int getOutputSize();
-
+    public DoubleSummaryStatistics getResultStatistics(){
+        return Arrays.stream(result).summaryStatistics();
+    }
+    
 }

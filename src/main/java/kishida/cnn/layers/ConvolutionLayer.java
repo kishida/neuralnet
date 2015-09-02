@@ -17,6 +17,7 @@ import kishida.cnn.kernels.ConvolutionBackwordDeltaKernel;
 import kishida.cnn.kernels.ConvolutionBackwordFilterKernel;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
+import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
 
 /** 畳み込み層 */
 public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
@@ -59,7 +60,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     public double[] forward(double[] img) {
         result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
                 filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias, activation, useGpu);
-        localNormalization(result);
+        //localNormalization(result);
+        ConvolutionLocalNormalizationKernel.INSTANCE.localNormalization(result,
+                outputChannels, outputWidth, outputHeight, false);
         return result;
     }
 

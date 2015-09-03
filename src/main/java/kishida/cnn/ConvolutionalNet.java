@@ -174,13 +174,13 @@ public class ConvolutionalNet {
 
         NeuralLayer npre = pre;
 
-        layers.add(npre = new FullyConnect("fc0", npre, 4096, 1, .5, new RetifierdLinear(), ep));
+        layers.add(npre = new FullyConnect("fc0", npre, 4096, 1, .5, new RetifierdLinear(), ep, false));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 1, 0.5, new RetifierdLinear(), ep);
+        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 1, 0.5, new RetifierdLinear(), ep, USE_GPU1);
         layers.add(npre = fc1);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, 1, new SoftMaxFunction(), ep);
+        FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, 1, new SoftMaxFunction(), ep, false);
         layers.add(npre = fc2);
 
         layers.forEach(System.out::println);

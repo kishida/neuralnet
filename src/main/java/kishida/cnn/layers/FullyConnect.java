@@ -9,54 +9,55 @@ import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.ActivationFunction;
+import kishida.cnn.kernels.FullyForwardKernel;
 
 /**
  *
  * @author naoki
  */
 public class FullyConnect extends NeuralLayer implements LerningLayer{
-    double[][] weight;
+    double[]weight;
     double[] bias;
-    double[][] weightDelta;
+    double[]weightDelta;
     double[] biasDelta;
     int out;
     int in;
     int[] dropout;
     double dropoutRate = 1;
     double localEp;
+    boolean useGpu;
 
-    public FullyConnect(String name, NeuralLayer preLayer, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep) {
-        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, ep);
+    public FullyConnect(String name, NeuralLayer preLayer, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep, boolean useGpu) {
+        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, ep, useGpu);
         this.preLayer = preLayer;
     }
 
-    public FullyConnect(String name, int in, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep) {
+    public FullyConnect(String name, int in, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep, boolean useGpu) {
         this(name, in, out,
-                Stream.generate(() -> IntStream.range(0, out)// ここをparallelにすると、nextDoubleで同期化されて遅くなる
-                        .mapToDouble(d -> ConvolutionalNet.random.nextGaussian() * 0.01)
-                        .toArray()).limit(in).toArray(double[][]::new),
+                DoubleStream.generate(() -> // ここをparallelにすると、nextDoubleで同期化されて遅くなる
+                        ConvolutionalNet.random.nextGaussian() * 0.01).limit(in * out).toArray(),
                 DoubleStream.generate(() -> initBias).limit(out).toArray()
-                , dropoutRate, ep, activation);
+                , dropoutRate, ep, activation, useGpu);
     }
 
-    public FullyConnect(String name, int in, int out, double[][] weight,
-            double[] bias, double dropoutRate, double localEp, ActivationFunction activation) {
+    public FullyConnect(String name, int in, int out, double[] weight,
+            double[] bias, double dropoutRate, double localEp, ActivationFunction activation, boolean useGpu) {
         super(name, activation);
         this.name = name;
         this.in = in;
         this.out = out;
         this.weight = weight;
         this.bias = bias;
-        this.weightDelta = new double[in][out];
+        this.weightDelta = new double[in * out];
         this.biasDelta = new double[out];
         this.localEp = localEp;
         this.dropout = IntStream.generate(() -> 1).limit(out).toArray();
         this.dropoutRate = dropoutRate;
         this.weight = weight;
         this.bias = bias;
+        this.useGpu = useGpu;
     }
 
     public void prepareDropout() {
@@ -67,12 +68,15 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     public double[] forward(double[] in) {
         prepareDropout();
         result = new double[out];
+
+        FullyForwardKernel.INSTANCE.forward(out, dropout, in, result, weight, bias, useGpu);
+        /*
         IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
             for (int i = 0; i < in.length; ++i) {
-                result[j] += in[i] * weight[i][j];
+                result[j] += in[i] * weight[i * out + j];
             }
             result[j] += bias[j];
-        });
+        });*/
         activation.applyAfter(result);
         if (!Arrays.stream(result).allMatch(Double::isFinite)) {
             System.out.println("there is infinite value");
@@ -95,8 +99,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
                     continue;
                 }
                 double d = diffed[j] * delta[j];
-                newDelta[i] += d *  weight[i][j];//in[i] *;
-                weightDelta[i][j] += d * in[i] * localEp;
+                newDelta[i] += d *  weight[i * out + j];//in[i] *;
+                weightDelta[i * out + j] += d * in[i] * localEp;
             }
         });
         IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
@@ -107,19 +111,15 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public void prepareBatch(double momentam) {
-        Arrays.stream(weightDelta).parallel().forEach(row -> {
-            IntStream.range(0, row.length).forEach(i -> row[i] = row[i] * momentam);
-        });
+        IntStream.range(0, weightDelta.length).forEach(i -> weightDelta[i] = weightDelta[i] * momentam);
         IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
     }
 
     @Override
     public void joinBatch(int count, double weightDecay, double learningRate) {
-        IntStream.range(0, weight.length).parallel().forEach(i -> {
-            for(int j = 0; j < weight[i].length; ++j){
-                weight[i][j] += weightDelta[i][j] / count
-                        - weight[i][j] * weightDecay * learningRate;
-            }
+        IntStream.range(0, weight.length).parallel().forEach(ij -> {
+                weight[ij] += weightDelta[ij] / count
+                        - weight[ij] * weightDecay * learningRate;
         });
         IntStream.range(0, bias.length).parallel().forEach(i -> {
             bias[i] += biasDelta[i] / count;
@@ -142,7 +142,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public DoubleSummaryStatistics getWeightStatistics() {
-        return Arrays.stream(weight).flatMapToDouble(Arrays::stream).summaryStatistics();
+        return Arrays.stream(weight).summaryStatistics();
     }
 
     @Override

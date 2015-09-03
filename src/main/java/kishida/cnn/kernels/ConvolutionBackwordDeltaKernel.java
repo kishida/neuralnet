@@ -40,7 +40,7 @@ public class ConvolutionBackwordDeltaKernel extends Kernel {
                         int y = (yy - j + sizeHalf) / stride;
                         if ((yy - j + sizeHalf) % stride == 0 && y >= 0 && y < outputHeight) {
                             int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
-                            double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
+                            double d = result[fxy] >= 0 ? delta[fxy] : 0;
                             tempDelta += d * //input[chxxyy] *
                                     filter[f * inputChannels * filterSize * filterSize +
                                         ch * filterSize * filterSize + i * filterSize + j];

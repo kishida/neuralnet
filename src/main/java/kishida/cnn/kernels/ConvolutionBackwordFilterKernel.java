@@ -34,7 +34,7 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
         for (int x = 0; x < outputWidth; ++x) {
             for (int y = 0; y < outputHeight; ++y) {
                 int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
-                double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
+                double d = result[fxy] >= 0 ? delta[fxy] : 0;
                 int xx = x * stride + i - filterSize / 2;
                 if (xx >= 0 && xx < inputWidth) {
                     int yy = y * stride + j - filterSize / 2;
@@ -76,7 +76,7 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
         this.filterSize = filterSize;
         this.stride = stride;
         this.result = result;
-        this.localEp = ep / (outputWidth * outputHeight);
+        this.localEp = ep;// / outputWidth;// * outputHeight);
         if (useGpu) {
             put(delta);
             put(filter);

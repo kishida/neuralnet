@@ -27,7 +27,7 @@ public class ConvolutionBackwordKernel extends Kernel {
     }
 
     private void proc(int fxy) {
-        double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
+        double d = result[fxy] >= 0 ? delta[fxy] : 0;
         int f = fxy / (outputWidth * outputHeight);
         int x = (fxy % (outputWidth * outputHeight)) / outputHeight;
         int y = fxy % outputHeight;

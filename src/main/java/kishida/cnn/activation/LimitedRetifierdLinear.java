@@ -20,7 +20,7 @@ public class LimitedRetifierdLinear extends ActivationFunction {
 
     @Override
     public double diff(double value) {
-        return value > 0 && value <= 2 ? 1 : 0;
+        return value >= 0 && value <= 2 ? 1 : 0;
     }
 
 }

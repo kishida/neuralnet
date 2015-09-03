@@ -10,12 +10,12 @@ public class RetifierdLinear extends ActivationFunction {
 
     @Override
     public double apply(double value) {
-        return value > 0 ? value : 0;
+        return value >= 0 ? value : 0;
     }
 
     @Override
     public double diff(double value) {
-        return value > 0 ? 1 : 0;
+        return value >= 0 ? 1 : 0;
     }
 
 }

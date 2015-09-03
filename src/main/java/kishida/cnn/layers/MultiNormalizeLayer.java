@@ -91,10 +91,7 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
 
     @Override
     public double[] backward(double[] in, double[] delta) {
-        return IntStream.range(0, delta.length).mapToDouble(chxy -> {
-            int xy = chxy % (inputWidth * inputHeight);
-            return delta[chxy] * rates[xy] + averages[xy];
-        }).toArray();
+        return delta;
     }
 
 }

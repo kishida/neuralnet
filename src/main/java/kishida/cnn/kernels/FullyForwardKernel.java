@@ -35,11 +35,11 @@ public class FullyForwardKernel extends Kernel{
     int out;
     int inSize;
     int[] dropout;
-    double[] in;
-    double[] result;
-    double[] weight;
-    double[] bias;
-    public void forward(int out, int[] dropout, double[] in, double[] result, double[] weight, double[] bias, boolean useGpu){
+    float[] in;
+    float[] result;
+    float[] weight;
+    float[] bias;
+    public void forward(int out, int[] dropout, float[] in, float[] result, float[] weight, float[] bias, boolean useGpu){
         this.inSize = in.length;
         this.dropout = dropout;
         this.out = out;

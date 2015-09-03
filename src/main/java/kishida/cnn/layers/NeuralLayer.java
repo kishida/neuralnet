@@ -5,9 +5,9 @@
  */
 package kishida.cnn.layers;
 
-import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.Objects;
+import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.ActivationFunction;
 
 /**
@@ -16,7 +16,7 @@ import kishida.cnn.activation.ActivationFunction;
  */
 public abstract class NeuralLayer {
     String name;
-    double[] result;
+    float[] result;
     NeuralLayer preLayer;
     ActivationFunction activation;
 
@@ -25,23 +25,23 @@ public abstract class NeuralLayer {
         this.activation = activation;
     }
 
-    public double[] forward() {
+    public float[] forward() {
         Objects.requireNonNull(preLayer, "preLayer is null on " + name);
         return forward(preLayer.result);
     }
 
-    public double[] backward(double[] delta) {
+    public float[] backward(float[] delta) {
         return backward(preLayer.result, delta);
     }
 
-    public abstract double[] forward(double[] in);
+    public abstract float[] forward(float[] in);
 
-    public abstract double[] backward(double[] in, double[] delta);
+    public abstract float[] backward(float[] in, float[] delta);
 
-    public void prepareBatch(double momentam){
+    public void prepareBatch(float momentam){
         // do nothing as default
     }
-    public void joinBatch(int count, double weightDecay, double learningRate){
+    public void joinBatch(int count, float weightDecay, float learningRate){
         // do nothing as default
     }
 
@@ -49,13 +49,13 @@ public abstract class NeuralLayer {
         return name;
     }
 
-    public double[] getResult() {
+    public float[] getResult() {
         return result;
     }
 
     public abstract int getOutputSize();
     public DoubleSummaryStatistics getResultStatistics(){
-        return Arrays.stream(result).summaryStatistics();
+        return ConvolutionalNet.summary(result);
     }
 
 }

@@ -6,8 +6,8 @@
 package kishida.cnn.kernels;
 
 import com.amd.aparapi.Kernel;
-import java.util.Arrays;
 import java.util.stream.IntStream;
+import kishida.cnn.ConvolutionalNet;
 
 /**
  *
@@ -19,7 +19,7 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
     public ConvolutionLocalNormalizationKernel() {
     }
 
-    public void localNormalization(double[] result, int outputChannels, int outputWidth, int outputHeight, boolean useGpu){
+    public void localNormalization(float[] result, int outputChannels, int outputWidth, int outputHeight, boolean useGpu){
         this.result = result;
         this.outputChannels = outputChannels;
         this.outputWidth = outputWidth;
@@ -30,7 +30,7 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
         }else{
             IntStream.range(0, outputWidth).parallel().forEach(x -> {
                 for(int y = 0; y < outputHeight; ++y){
-                    procCpu(x * outputHeight + y, new double[n]);
+                    procCpu(x * outputHeight + y, new float[n]);
                 }
             });
         }
@@ -43,18 +43,18 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
         procGpu(xy);
     }
 
-    double[] result;
+    float[] result;
     int outputWidth;
     int outputHeight;
     int outputChannels;
     static final int n = 5;
 
-    @PrivateMemorySpace(n) double[] sigma = new double[n]; // not work
+    @PrivateMemorySpace(n) float[] sigma = new float[n]; // not work
 
     public void procGpu(int xy){
         final int k = 2;
-        final double a = 0.0001;
-        final double b = 0.75;
+        final float a = 0.0001f;
+        final float b = 0.75f;
         int lp = 0;
         for(; lp < n / 2; ++lp){
             sigma[lp] =
@@ -66,7 +66,7 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
                     result[lp * outputWidth * outputHeight + xy] *
                     result[lp * outputWidth * outputHeight + xy];
             lp = lp + 1;
-            double sum = 0;
+            float sum = 0;
             for(int i = 0; i < n; ++i){
                 sum += sigma[i];
             }
@@ -76,10 +76,10 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
 
     }
 
-    public void procCpu(int xy, double[] sig){
+    public void procCpu(int xy, float[] sig){
         final int k = 2;
-        final double a = 0.0001;
-        final double b = 0.75;
+        final float a = 0.0001f;
+        final float b = 0.75f;
         int lp = 0;
         for(; lp < n / 2; ++lp){
             sig[lp] =
@@ -91,7 +91,7 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
                     result[lp * outputWidth * outputHeight + xy] *
                     result[lp * outputWidth * outputHeight + xy];
             lp = lp + 1;
-            double sum = Arrays.stream(sig).sum();
+            float sum = (float)ConvolutionalNet.summary(sig).getSum();
             result[ch * outputWidth * outputHeight + xy] = result[ch * outputWidth * outputHeight + xy] /
                     pow(k + a * sum, b);
         }

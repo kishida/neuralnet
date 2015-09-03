@@ -18,18 +18,18 @@ public class InputLayer extends ImageNeuralLayer {
     }
 
     @Override
-    public double[] forward(double[] in) {
+    public float[] forward(float[] in) {
         this.result = in;
         return result;
     }
 
     @Override
-    public double[] backward(double[] in, double[] delta) {
+    public float[] backward(float[] in, float[] delta) {
         // do nothing
         return null;
     }
 
-    public void setInput(double[] input){
+    public void setInput(float[] input){
         result = input;
     }
 }

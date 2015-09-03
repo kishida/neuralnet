@@ -5,28 +5,28 @@
  */
 package kishida.cnn.activation;
 
-import java.util.Arrays;
 import java.util.stream.IntStream;
 
 /** ソフトマックス */
 public class SoftMaxFunction extends ActivationFunction {
 
     @Override
-    public double apply(double value) {
+    public float apply(float value) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public void applyAfter(double[] values) {
-        double total = Arrays.stream(values).parallel()
-                .map((double d) -> Math.exp(Math.min(700, d))).sum();
+    public void applyAfter(float[] values) {
+        float total = (float)IntStream.range(0, values.length).parallel()
+                .mapToDouble(i -> values[i])
+                .map(d -> Math.exp(Math.min(700, d))).sum();
         IntStream.range(0, values.length).parallel().forEach(i -> {
-            values[i] = Math.exp(Math.min(700, values[i])) / total;
+            values[i] = (float)Math.exp(Math.min(700, values[i])) / total;
         });
     }
 
     @Override
-    public double diff(double value) {
+    public float diff(float value) {
         return value * (1 - value);
     }
 

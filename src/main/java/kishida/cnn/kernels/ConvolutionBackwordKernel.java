@@ -27,7 +27,7 @@ public class ConvolutionBackwordKernel extends Kernel {
     }
 
     private void proc(int fxy) {
-        double d = result[fxy] >= 0 ? delta[fxy] : 0;
+        float d = result[fxy] >= 0 ? delta[fxy] : 0;
         int f = fxy / (outputWidth * outputHeight);
         int x = (fxy % (outputWidth * outputHeight)) / outputHeight;
         int y = fxy % outputHeight;
@@ -38,7 +38,7 @@ public class ConvolutionBackwordKernel extends Kernel {
                     for (int j = 0; j < filterSize; ++j) {
                         int yy = y * stride + j - filterSize / 2;
                         if (yy >= 0 && yy < inputHeight) {
-                            double dxinp = d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                            float dxinp = d * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
                             int fcij = f * inputChannels * filterSize * filterSize +
                                     ch * filterSize * filterSize + i * filterSize + j;
                             tempDelta[f * inputChannels * inputWidth * inputHeight +
@@ -51,30 +51,30 @@ public class ConvolutionBackwordKernel extends Kernel {
         }
         tempBiasDelta[fxy] = localEp * d;
     }
-    double[] input;
-    double[] result;
+    float[] input;
+    float[] result;
     int inputChannels;
     int inputWidth;
     int inputHeight;
-    double[] filter;
+    float[] filter;
     int outputChannels;
     int outputWidth;
     int outputHeight;
     int filterSize;
     int stride;
-    double[] bias;
-    double[] delta;
-    double localEp;
-    double[] tempDelta;
-    double[] filterDelta;
-    double[] biasDelta;
-    double[] tempBiasDelta;
+    float[] bias;
+    float[] delta;
+    float localEp;
+    float[] tempDelta;
+    float[] filterDelta;
+    float[] biasDelta;
+    float[] tempBiasDelta;
 
-    public double[] backward(double[] delta, double[] result,
-            double[] input, int inputChannels, int inputWidth, int inputHeight,
-            double[] filter, int outputChannels, int outputWidth, int outputHeight,
-            double[] filterDelta, double[] biasDelta,
-            int filterSize, int stride, double[] bias, double ep, boolean useGpu) {
+    public float[] backward(float[] delta, float[] result,
+            float[] input, int inputChannels, int inputWidth, int inputHeight,
+            float[] filter, int outputChannels, int outputWidth, int outputHeight,
+            float[] filterDelta, float[] biasDelta,
+            int filterSize, int stride, float[] bias, float ep, boolean useGpu) {
         this.delta = delta;
         this.input = input;
         this.inputChannels = inputChannels;
@@ -88,7 +88,7 @@ public class ConvolutionBackwordKernel extends Kernel {
         this.stride = stride;
         this.bias = bias;
         this.result = result;
-        this.tempDelta = new double[outputChannels * inputChannels * inputWidth * inputHeight];
+        this.tempDelta = new float[outputChannels * inputChannels * inputWidth * inputHeight];
         this.localEp = ep / (outputWidth * outputHeight);
         this.biasDelta = biasDelta;
         this.filterDelta = filterDelta;
@@ -111,7 +111,7 @@ public class ConvolutionBackwordKernel extends Kernel {
                 }
             });
         }
-        double[] newDelta = new double[input.length];
+        float[] newDelta = new float[input.length];
         IntStream.range(0, outputChannels).parallel().forEach(f -> {
             for (int chxy = 0; chxy < inputChannels * inputWidth * inputHeight; ++chxy) {
                 newDelta[chxy] += tempDelta[f * inputChannels * inputWidth * inputHeight + chxy];

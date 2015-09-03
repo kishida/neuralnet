@@ -12,12 +12,12 @@ package kishida.cnn.activation;
 public class LinearFunction extends ActivationFunction {
 
     @Override
-    public double apply(double value) {
+    public float apply(float value) {
         return value;
     }
 
     @Override
-    public double diff(double value) {
+    public float diff(float value) {
         return 1;
     }
 

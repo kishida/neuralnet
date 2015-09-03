@@ -137,8 +137,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     }
 
     @Override
-    public void joinBatch(int count) {
-        IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] += filterDelta[i] / count);
+    public void joinBatch(int count, double weightDecay, double learningRate) {
+        IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] +=  filterDelta[i] / count
+                - weightDecay * learningRate * filter[i]);
         IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i] / count);
     }
 

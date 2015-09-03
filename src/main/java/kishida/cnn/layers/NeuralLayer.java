@@ -41,7 +41,7 @@ public abstract class NeuralLayer {
     public void prepareBatch(double momentam){
         // do nothing as default
     }
-    public void joinBatch(int count){
+    public void joinBatch(int count, double weightDecay, double learningRate){
         // do nothing as default
     }
 
@@ -57,5 +57,5 @@ public abstract class NeuralLayer {
     public DoubleSummaryStatistics getResultStatistics(){
         return Arrays.stream(result).summaryStatistics();
     }
-    
+
 }

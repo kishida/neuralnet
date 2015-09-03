@@ -49,6 +49,7 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  */
 public class ConvolutionalNet {
     private static final double ep = 0.005;
+    private static final double weightDecay = 0.0005;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
@@ -255,7 +256,7 @@ public class ConvolutionalNet {
 
             count[0]++;
             if(count[0] >= MINI_BATCH){
-                layers.forEach(layer -> layer.joinBatch(MINI_BATCH));
+                layers.forEach(layer -> layer.joinBatch(MINI_BATCH, weightDecay, ep));
                 for(int i = 0; i < conv1.getOutputChannels(); ++i){
                     filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
                             conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));

@@ -114,10 +114,11 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     }
 
     @Override
-    public void joinBatch(int count) {
+    public void joinBatch(int count, double weightDecay, double learningRate) {
         IntStream.range(0, weight.length).parallel().forEach(i -> {
             for(int j = 0; j < weight[i].length; ++j){
-                weight[i][j] += weightDelta[i][j] / count;
+                weight[i][j] += weightDelta[i][j] / count
+                        - weight[i][j] * weightDecay * learningRate;
             }
         });
         IntStream.range(0, bias.length).parallel().forEach(i -> {

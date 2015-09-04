@@ -7,7 +7,6 @@ package kishida.cnn.kernels;
 
 import com.amd.aparapi.Kernel;
 import java.util.stream.IntStream;
-import kishida.cnn.ConvolutionalNet;
 
 /**
  *
@@ -91,7 +90,11 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
                     result[lp * outputWidth * outputHeight + xy] *
                     result[lp * outputWidth * outputHeight + xy];
             lp = lp + 1;
-            float sum = (float)ConvolutionalNet.summary(sig).getSum();
+            //float sum = (float)ConvolutionalNet.summary(sig).getSum();
+            float sum = 0;
+            for(float d : sig){
+                sum += d;
+            }
             result[ch * outputWidth * outputHeight + xy] = result[ch * outputWidth * outputHeight + xy] /
                     pow(k + a * sum, b);
         }

@@ -41,8 +41,6 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         this.ep = ep;
         this.preLayer = preLayer;
         this.filter = ConvolutionalNet.createGaussianArray(size * size * channel * filterCount, 0.01f);
-        float sum = ConvolutionalNet.floatSum(filter) / filterCount;
-        IntStream.range(0, filter.length).forEach(i -> filter[i] = filter[i] * .2f / sum);
         this.bias = new float[filterCount];
         Arrays.fill(bias, initBias);
         this.filterDelta = new float[filter.length];

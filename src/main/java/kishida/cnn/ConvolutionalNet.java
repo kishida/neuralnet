@@ -47,7 +47,7 @@ import kishida.cnn.layers.MultiNormalizeLayer;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final float ep = 0.005f;
+    private static final float learningRate = 0.01f;
     private static final float weightDecay = 0.0005f;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
@@ -152,34 +152,34 @@ public class ConvolutionalNet {
 
         ImageNeuralLayer pre = input;
         //一段目
-        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, 0, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, 0, learningRate, USE_GPU1));
         //一段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool1", 3, 2, pre));
         //一段目の正規化
         //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
         layers.add(pre = new MultiNormalizeLayer("norm1", 5, .000001f, pre, USE_GPU1));
         //二段目
-        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, 1, ep, USE_GPU2));
+        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, 1, learningRate, USE_GPU2));
         //二段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool2", 3, 2, pre));
 
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
         layers.add(pre = new MultiNormalizeLayer("norm2", 5, .000001f, pre, USE_GPU2));
 
-        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, 0, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, 0, learningRate, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, 1, learningRate, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, 1, learningRate, USE_GPU1));
         layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        layers.add(npre = new FullyConnect("fc0", npre, 4096, 1, .5f, new RetifierdLinear(), ep, false));
+        layers.add(npre = new FullyConnect("fc0", npre, 4096, 1, .5f, new RetifierdLinear(), learningRate, false));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 1, 0.5f, new RetifierdLinear(), ep, USE_GPU1);
+        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 1, 0.5f, new RetifierdLinear(), learningRate, USE_GPU1);
         layers.add(npre = fc1);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, 1, new SoftMaxFunction(), ep, false);
+        FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, 1, new SoftMaxFunction(), learningRate, false);
         layers.add(npre = fc2);
 
         layers.forEach(System.out::println);
@@ -255,7 +255,7 @@ public class ConvolutionalNet {
 
             count[0]++;
             if(count[0] >= MINI_BATCH){
-                layers.forEach(layer -> layer.joinBatch(MINI_BATCH, weightDecay, ep));
+                layers.forEach(layer -> layer.joinBatch(MINI_BATCH, weightDecay, learningRate));
                 for(int i = 0; i < conv1.getOutputChannels(); ++i){
                     filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
                             conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
@@ -584,11 +584,8 @@ public class ConvolutionalNet {
         return IntStream.range(start, end).parallel().mapToDouble(i -> data[i]).summaryStatistics();
     }
     public static float floatSum(float[] data){
-        float total = 0;
-        for(float f : data){
-            total += f;
-        }
-        return total;
+        return (float)IntStream.range(0, data.length).parallel().
+                mapToDouble(i -> data[i]).sum();
     }
 
     public static float[] createGaussianArray(int size, float std){

@@ -27,18 +27,18 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     int stride;
     int filterSize;
     boolean useGpu;
-    float ep;
+    float learningRate;
 
     public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
-            int filterCount, int size, int stride, float initBias, float ep, boolean useGpu) {
+            int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
         this(name, preLayer, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth,
-                filterCount, size, stride, initBias, ep, useGpu);
+                filterCount, size, stride, initBias, learningRate, useGpu);
     }
 
     public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
-            int channel, int width, int height, int filterCount, int size, int stride, float initBias, float ep, boolean useGpu) {
+            int channel, int width, int height, int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
         super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
-        this.ep = ep;
+        this.learningRate = learningRate;
         this.preLayer = preLayer;
         this.filter = ConvolutionalNet.createGaussianArray(size * size * channel * filterCount, 0.01f);
         this.bias = new float[filterCount];
@@ -102,9 +102,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
             ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result,
                     input, inputChannels, inputWidth, inputHeight,
-                    filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, ep, useGpu);
+                    filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, learningRate, useGpu);
             ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result,
-                    outputChannels, outputWidth, outputHeight, biasDelta, ep, tempDelta, useGpu);
+                    outputChannels, outputWidth, outputHeight, biasDelta, learningRate, tempDelta, useGpu);
             if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
@@ -123,7 +123,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     input, inputChannels, inputWidth, inputHeight,
                     filter, outputChannels, outputWidth, outputHeight,
                     filterDelta, biasDelta,
-                    filterSize, stride, bias, ep, false);
+                    filterSize, stride, bias, learningRate, false);
         }
     }
 

@@ -25,23 +25,23 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     int in;
     int[] dropout;
     float dropoutRate = 1;
-    float localEp;
+    float learningRate;
     boolean useGpu;
 
-    public FullyConnect(String name, NeuralLayer preLayer, int out, float initBias, float dropoutRate, ActivationFunction activation, float ep, boolean useGpu) {
-        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, ep, useGpu);
+    public FullyConnect(String name, NeuralLayer preLayer, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
+        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, learningRate, useGpu);
         this.preLayer = preLayer;
     }
 
-    public FullyConnect(String name, int in, int out, float initBias, float dropoutRate, ActivationFunction activation, float ep, boolean useGpu) {
+    public FullyConnect(String name, int in, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
         this(name, in, out,
                 ConvolutionalNet.createGaussianArray(in * out, 0.01f),
                 ConvolutionalNet.createArray(out, initBias),
-                dropoutRate, ep, activation, useGpu);
+                dropoutRate, learningRate, activation, useGpu);
     }
 
     public FullyConnect(String name, int in, int out, float[] weight,
-            float[] bias, float dropoutRate, float localEp, ActivationFunction activation, boolean useGpu) {
+            float[] bias, float dropoutRate, float learningRate, ActivationFunction activation, boolean useGpu) {
         super(name, activation);
         this.name = name;
         this.in = in;
@@ -50,7 +50,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.bias = bias;
         this.weightDelta = new float[in * out];
         this.biasDelta = new float[out];
-        this.localEp = localEp;
+        this.learningRate = learningRate;
         this.dropout = IntStream.generate(() -> 1).limit(out).toArray();
         this.dropoutRate = dropoutRate;
         this.weight = weight;
@@ -101,11 +101,11 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
                 }
                 float d = diffed[j] * delta[j];
                 newDelta[i] += d *  weight[i * out + j];//in[i] *;
-                weightDelta[i * out + j] += d * in[i] * localEp;
+                weightDelta[i * out + j] += d * in[i] * learningRate;
             }
         });
         IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
-            biasDelta[j] += diffed[j] * delta[j] * localEp;
+            biasDelta[j] += diffed[j] * delta[j] * learningRate;
         });
         return newDelta;
     }

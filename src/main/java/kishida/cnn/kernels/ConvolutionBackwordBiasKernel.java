@@ -26,21 +26,21 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
     }
     float[] result;
     float[] delta;
-    float localEp;
+    float learningRate;
     float[] tempBiasDelta;
 
     private void proc(int fxy) {
         float d = result[fxy] >= 0 ? delta[fxy] : 0;
         // float d = (result[fxy] >= 0 ? 1 : 0) * delta[fxy]; GPUで*delta[fxy]が無視された・・・
-        tempBiasDelta[fxy] = localEp * d;
+        tempBiasDelta[fxy] = learningRate * d;
     }
 
     public void backwordBias(float[] delta, float[] result,
             int outputChannels, int outputWidth, int outputHeight,
-            float[] bias, float ep, float[] tempBiasDelta, boolean useGpu) {
+            float[] bias, float learningRate, float[] tempBiasDelta, boolean useGpu) {
         this.delta = delta;
         this.result = result;
-        this.localEp = ep;// / outputWidth;// * outputHeight);
+        this.learningRate = learningRate;// / outputWidth;// * outputHeight);
         this.tempBiasDelta = tempBiasDelta;
         if (useGpu) {
             //put(delta);

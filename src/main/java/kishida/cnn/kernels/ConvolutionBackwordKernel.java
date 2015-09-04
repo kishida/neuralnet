@@ -43,13 +43,13 @@ public class ConvolutionBackwordKernel extends Kernel {
                                     ch * filterSize * filterSize + i * filterSize + j;
                             tempDelta[f * inputChannels * inputWidth * inputHeight +
                                     ch * inputWidth * inputHeight + xx * inputHeight + yy] += dxinp * filter[fcij];
-                            filterDelta[fcij] += dxinp * localEp;
+                            filterDelta[fcij] += dxinp * learningRate;
                         }
                     }
                 }
             }
         }
-        tempBiasDelta[fxy] = localEp * d;
+        tempBiasDelta[fxy] = learningRate * d;
     }
     float[] input;
     float[] result;
@@ -64,7 +64,7 @@ public class ConvolutionBackwordKernel extends Kernel {
     int stride;
     float[] bias;
     float[] delta;
-    float localEp;
+    float learningRate;
     float[] tempDelta;
     float[] filterDelta;
     float[] biasDelta;
@@ -74,7 +74,7 @@ public class ConvolutionBackwordKernel extends Kernel {
             float[] input, int inputChannels, int inputWidth, int inputHeight,
             float[] filter, int outputChannels, int outputWidth, int outputHeight,
             float[] filterDelta, float[] biasDelta,
-            int filterSize, int stride, float[] bias, float ep, boolean useGpu) {
+            int filterSize, int stride, float[] bias, float learningRate, boolean useGpu) {
         this.delta = delta;
         this.input = input;
         this.inputChannels = inputChannels;
@@ -89,7 +89,7 @@ public class ConvolutionBackwordKernel extends Kernel {
         this.bias = bias;
         this.result = result;
         this.tempDelta = new float[outputChannels * inputChannels * inputWidth * inputHeight];
-        this.localEp = ep / (outputWidth * outputHeight);
+        this.learningRate = learningRate;// / (outputWidth * outputHeight);
         this.biasDelta = biasDelta;
         this.filterDelta = filterDelta;
         this.tempBiasDelta = Arrays.copyOf(result, result.length);

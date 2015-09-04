@@ -39,7 +39,7 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
                 if (xx >= 0 && xx < inputWidth) {
                     int yy = y * stride + j - filterSize / 2;
                     if (yy >= 0 && yy < inputHeight) {
-                        df += d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                        df += d * learningRate * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
                     }
                 }
             }
@@ -58,12 +58,12 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
     int outputHeight;
     int filterSize;
     int stride;
-    float localEp;
+    float learningRate;
 
     public void backword(float[] delta, float[] result,
             float[] input, int inputChannels, int inputWidth, int inputHeight,
             float[] filter, int outputChannels, int outputWidth, int outputHeight,
-            int filterSize, int stride, float ep, boolean useGpu) {
+            int filterSize, int stride, float learningRate, boolean useGpu) {
         this.input = input;
         this.delta = delta;
         this.inputChannels = inputChannels;
@@ -76,7 +76,7 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
         this.filterSize = filterSize;
         this.stride = stride;
         this.result = result;
-        this.localEp = ep;// / outputWidth;// * outputHeight);
+        this.learningRate = learningRate;// / outputWidth;// * outputHeight);
         if (useGpu) {
             put(delta);
             put(filter);

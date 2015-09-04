@@ -31,7 +31,8 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
 
     private void proc(int fxy) {
         float d = result[fxy] >= 0 ? delta[fxy] : 0;
-        // float d = (result[fxy] >= 0 ? 1 : 0) * delta[fxy]; GPUで*delta[fxy]が無視された・・・
+        //float d = (result[fxy] >= 0 ? 1 : 0) * delta[fxy]; // GPUで*delta[fxy]が無視された・・・
+		//こうなる。 float d = (float)(this->result[fxy]>=0.0f)?1:0 * this->delta[fxy];
         tempBiasDelta[fxy] = learningRate * d;
     }
 

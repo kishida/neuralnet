@@ -138,7 +138,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public String toString() {
-        return String.format("Fully connect:%s %d->%d dropout:%.2f", name, in, out, dropoutRate);
+        return String.format("%s:Fully connect %d->%d dropout:%.2f", name, in, out, dropoutRate);
     }
 
     @Override

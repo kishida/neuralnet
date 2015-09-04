@@ -53,7 +53,7 @@ public class NormalizeLayer extends ImageNeuralLayer {
 
     @Override
     public String toString() {
-        return String.format("Normalize:%s size:%dx%d stride:1 in:%dx%dx%d out %dx%dx%d",
+        return String.format("%s:Normalize size:%dx%d stride:1 in:%dx%dx%d out %dx%dx%d",
                 name, this.size, this.size,
                 this.inputWidth, this.inputHeight, this.inputChannels,
                 this.outputWidth, this.outputHeight, this.outputChannels);

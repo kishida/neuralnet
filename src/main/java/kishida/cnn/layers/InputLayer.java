@@ -32,4 +32,9 @@ public class InputLayer extends ImageNeuralLayer {
     public void setInput(float[] input){
         result = input;
     }
+
+    @Override
+    public String toString() {
+        return String.format("%s:Input size:%dx%d",name, this.outputWidth, this.outputHeight);
+    }
 }

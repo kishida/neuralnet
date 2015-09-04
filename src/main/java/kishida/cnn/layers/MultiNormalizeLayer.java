@@ -94,4 +94,12 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
         return delta;
     }
 
+    @Override
+    public String toString() {
+        return String.format("%s:Multi channel normalize size:%dx%d in:%dx%dx%d out %dx%dx%d",
+                name, this.size, this.size,
+                this.inputWidth, this.inputHeight, this.inputChannels,
+                this.outputWidth, this.outputHeight, this.outputChannels);
+    }
+
 }

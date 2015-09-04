@@ -151,11 +151,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     @Override
     public String toString() {
         DoubleSummaryStatistics sum = ConvolutionalNet.summary(filter);
-        return String.format("Convolutional:%s filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d%n"
-                + "Filter %.2f-%.2f ave:%.2f filtertotal:%.2f",
+        return String.format("%s:Convolutional filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d",
                 name, filterSize, filterSize, outputChannels, stride,
-                inputWidth, inputHeight, inputChannels, outputWidth, outputHeight, outputChannels,
-                sum.getMin(), sum.getMax(), sum.getAverage(), sum.getSum() / inputChannels / outputChannels);
+                inputWidth, inputHeight, inputChannels, outputWidth, outputHeight, outputChannels);
     }
 
     @Override

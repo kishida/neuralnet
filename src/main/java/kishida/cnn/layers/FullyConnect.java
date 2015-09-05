@@ -5,7 +5,6 @@
  */
 package kishida.cnn.layers;
 
-import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.ConvolutionalNet;
@@ -76,10 +75,6 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
             result[j] += bias[j];
         });*/
         activation.applyAfter(result);
-        if (!IntStream.range(0, result.length).allMatch(idx -> Float.isFinite(result[idx]))) {
-            System.out.println("there is infinite value");
-            System.out.println(Arrays.toString(result));
-        }
         return result;
     }
 

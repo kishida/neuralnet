@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.DoubleToIntFunction;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.imageio.ImageIO;
@@ -93,6 +94,7 @@ public class ConvolutionalNet {
     static LinkedList<Integer> rateData = new LinkedList<>();
 
     public static void main(String[] args) throws IOException {
+        System.setProperty("com.amd.aparapi.enableShowGeneratedOpenCL", "false");
         String def = "C:\\Users\\naoki\\Desktop\\sampleimg288";
         Path dir = Paths.get(args.length > 0 ? args[0] : def);
         List<String> categories = Files.list(dir)
@@ -419,6 +421,10 @@ public class ConvolutionalNet {
             layers.get(i).forward();
         }
         float[] output = layers.get(layers.size() - 1).getResult();
+        if (!toDoubleStream(output).allMatch(d -> Double.isFinite(d))) {
+            throw new RuntimeException("there is infinite value");
+        }
+
         //誤差を求める
         float[] delta = new float[output.length];
         for(int idx = 0; idx < output.length; ++idx){
@@ -600,5 +606,9 @@ public class ConvolutionalNet {
         float[] result = new float[size];
         Arrays.fill(result, value);
         return result;
+    }
+
+    public static DoubleStream toDoubleStream(float[] data){
+        return IntStream.range(0, data.length).mapToDouble(i -> data[i]);
     }
 }

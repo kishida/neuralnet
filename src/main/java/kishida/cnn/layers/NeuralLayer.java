@@ -7,8 +7,8 @@ package kishida.cnn.layers;
 
 import java.util.DoubleSummaryStatistics;
 import java.util.Objects;
-import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.ActivationFunction;
+import kishida.cnn.util.FloatUtil;
 
 /**
  *
@@ -55,7 +55,7 @@ public abstract class NeuralLayer {
 
     public abstract int getOutputSize();
     public DoubleSummaryStatistics getResultStatistics(){
-        return ConvolutionalNet.summary(result);
+        return FloatUtil.summary(result);
     }
 
 }

@@ -17,6 +17,7 @@ import kishida.cnn.kernels.ConvolutionBackwordFilterKernel;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
+import kishida.cnn.util.FloatUtil;
 
 /** 畳み込み層 */
 public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
@@ -40,7 +41,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
         this.learningRate = learningRate;
         this.preLayer = preLayer;
-        this.filter = ConvolutionalNet.createGaussianArray(size * size * channel * filterCount, 0.01f);
+        this.filter = FloatUtil.createGaussianArray(size * size * channel * filterCount, 0.01f, ConvolutionalNet.random);
         this.bias = new float[filterCount];
         Arrays.fill(bias, initBias);
         this.filterDelta = new float[filter.length];
@@ -82,7 +83,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     sigma[lp % 5] = lp >= outputChannels ? 0 :
                             result[lp * outputWidth * outputHeight + xy] * result[lp * outputWidth * outputHeight + xy];
                     lp = lp + 1;
-                    float sum = ConvolutionalNet.floatSum(sigma);
+                    float sum = FloatUtil.floatSum(sigma);
                     result[ch * outputWidth * outputHeight + xy] = result[ch * outputWidth * outputHeight + xy] /
                             (float)Math.pow(k + a * sum, b);
                 }
@@ -150,7 +151,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
 
     @Override
     public String toString() {
-        DoubleSummaryStatistics sum = ConvolutionalNet.summary(filter);
+        DoubleSummaryStatistics sum = FloatUtil.summary(filter);
         return String.format("%s:Convolutional filter:%dx%d x%d stride:%d in:%dx%dx%d out %dx%dx%d",
                 name, filterSize, filterSize, outputChannels, stride,
                 inputWidth, inputHeight, inputChannels, outputWidth, outputHeight, outputChannels);
@@ -158,12 +159,12 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
 
     @Override
     public DoubleSummaryStatistics getWeightStatistics() {
-        return ConvolutionalNet.summary(filter);
+        return FloatUtil.summary(filter);
     }
 
     @Override
     public DoubleSummaryStatistics getBiasStatistics() {
-        return ConvolutionalNet.summary(bias);
+        return FloatUtil.summary(bias);
     }
 
 }

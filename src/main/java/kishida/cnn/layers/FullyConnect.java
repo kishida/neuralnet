@@ -10,6 +10,7 @@ import java.util.stream.IntStream;
 import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.kernels.FullyForwardKernel;
+import kishida.cnn.util.FloatUtil;
 
 /**
  *
@@ -34,8 +35,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     public FullyConnect(String name, int in, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
         this(name, in, out,
-                ConvolutionalNet.createGaussianArray(in * out, 0.01f),
-                ConvolutionalNet.createArray(out, initBias),
+                FloatUtil.createGaussianArray(in * out, 0.01f, ConvolutionalNet.random),
+                FloatUtil.createArray(out, initBias),
                 dropoutRate, learningRate, activation, useGpu);
     }
 
@@ -138,12 +139,12 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public DoubleSummaryStatistics getWeightStatistics() {
-        return ConvolutionalNet.summary(weight);
+        return FloatUtil.summary(weight);
     }
 
     @Override
     public DoubleSummaryStatistics getBiasStatistics() {
-        return ConvolutionalNet.summary(bias);
+        return FloatUtil.summary(bias);
     }
 
 }

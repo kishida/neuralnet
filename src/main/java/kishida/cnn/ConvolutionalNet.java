@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.DoubleToIntFunction;
 import java.util.stream.Collectors;
-import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.imageio.ImageIO;
@@ -42,6 +41,7 @@ import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.layers.LerningLayer;
 import kishida.cnn.layers.MultiNormalizeLayer;
+import kishida.cnn.util.FloatUtil;
 
 /**
  *
@@ -316,7 +316,7 @@ public class ConvolutionalNet {
         Graphics2D g = (Graphics2D) result.getGraphics();
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, height);
-        DoubleSummaryStatistics summary = summary(data);
+        DoubleSummaryStatistics summary = FloatUtil.summary(data);
         DoubleToIntFunction f = d -> (int)(height -
                 (d - summary.getMin()) / (summary.getMax() - summary.getMin()) * height);
         g.setColor(Color.BLACK);
@@ -421,7 +421,7 @@ public class ConvolutionalNet {
             layers.get(i).forward();
         }
         float[] output = layers.get(layers.size() - 1).getResult();
-        if (!toDoubleStream(output).allMatch(d -> Double.isFinite(d))) {
+        if (!FloatUtil.toDoubleStream(output).allMatch(d -> Double.isFinite(d))) {
             throw new RuntimeException("there is infinite value");
         }
 
@@ -494,7 +494,7 @@ public class ConvolutionalNet {
     }
 
     static BufferedImage arrayToImage(float[] filteredData, int idx, int width, int height, float rate) {
-        DoubleSummaryStatistics summary = summary(filteredData,
+        DoubleSummaryStatistics summary = FloatUtil.summary(filteredData,
                 idx * 3 * width * height, (idx + 1) * 3 * width * height);
         double[] normed = IntStream.range(idx * 3 * width * height, (idx + 1) * 3 * width * height)
                 .parallel()
@@ -570,7 +570,7 @@ public class ConvolutionalNet {
             int start = i * size;
             int end = start + size;
             // 平均
-            DoubleSummaryStatistics sum = summary(data, start, end);
+            DoubleSummaryStatistics sum = FloatUtil.summary(data, start, end);
             // 分散
             float dist = (float)Math.sqrt(IntStream.range(start, end).parallel().mapToDouble(idx -> data[idx])
                     .map(d -> (d - sum.getAverage()) * (d - sum.getAverage()))
@@ -583,32 +583,4 @@ public class ConvolutionalNet {
         return result;
     }
 
-    public static DoubleSummaryStatistics summary(float[] data){
-        return summary(data, 0, data.length);
-    }
-    public static DoubleSummaryStatistics summary(float[] data, int start, int end){
-        return IntStream.range(start, end).parallel().mapToDouble(i -> data[i]).summaryStatistics();
-    }
-    public static float floatSum(float[] data){
-        return (float)IntStream.range(0, data.length).parallel().
-                mapToDouble(i -> data[i]).sum();
-    }
-
-    public static float[] createGaussianArray(int size, float std){
-        float[] result = new float[size];
-        for(int i = 0; i < result.length; ++i){
-            result[i] = (float)(ConvolutionalNet.random.nextGaussian() * std);
-        }
-        return result;
-    }
-
-    public static float[] createArray(int size, float value){
-        float[] result = new float[size];
-        Arrays.fill(result, value);
-        return result;
-    }
-
-    public static DoubleStream toDoubleStream(float[] data){
-        return IntStream.range(0, data.length).mapToDouble(i -> data[i]);
-    }
 }

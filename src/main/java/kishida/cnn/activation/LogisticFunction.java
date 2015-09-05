@@ -9,12 +9,12 @@ package kishida.cnn.activation;
 public class LogisticFunction extends ActivationFunction {
 
     @Override
-    public double apply(double value) {
-        return 1 / (1 + Math.exp(-value));
+    public float apply(float value) {
+        return 1 / (1 + (float)Math.exp(-value));
     }
 
     @Override
-    public double diff(double value) {
+    public float diff(float value) {
         return value * (1 - value);
     }
 

@@ -28,17 +28,17 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
                 channels, inputWidth / stride, inputHeight / stride);
         this.size = size;
         this.stride = stride;
-        result = new double[outputChannels * outputWidth * outputHeight];
-        newDelta = new double[channels * inputWidth * inputHeight];
+        result = new float[outputChannels * outputWidth * outputHeight];
+        newDelta = new float[channels * inputWidth * inputHeight];
     }
 
     /** プーリング(max) */
     @Override
-    public double[] forward(double[] data) {
+    public float[] forward(float[] data) {
         IntStream.range(0, inputChannels).parallel().forEach(ch -> {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int y = 0; y < outputHeight; ++y) {
-                    double max = Double.NEGATIVE_INFINITY;
+                    float max = Float.NEGATIVE_INFINITY;
                     for (int i = 0; i < size; ++i) {
                         int xx = x * stride + i - size / 2;
                         if (xx < 0 || xx >= inputWidth) {
@@ -49,7 +49,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
                             if (yy < 0 || yy >= inputHeight) {
                                 continue;
                             }
-                            double d = data[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                            float d = data[ch * inputWidth * inputHeight + xx * inputHeight + yy];
                             if (max < d) {
                                 max = d;
                             }
@@ -62,14 +62,14 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
         return result;
     }
 
-    double[] newDelta;
+    float[] newDelta;
     @Override
-    public double[] backward(double[] in, double[] delta) {
+    public float[] backward(float[] in, float[] delta) {
         Arrays.fill(newDelta, 0);
         IntStream.range(0, inputChannels).parallel().forEach(ch -> {
             for (int x = 0; x < outputWidth; ++x) {
                 for (int y = 0; y < outputHeight; ++y) {
-                    double max = Double.NEGATIVE_INFINITY;
+                    float max = Float.NEGATIVE_INFINITY;
                     int maxX = 0;
                     int maxY = 0;
                     for (int i = 0; i < size; ++i) {
@@ -82,7 +82,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
                             if (yy < 0 || yy >= inputHeight) {
                                 continue;
                             }
-                            double d = in[ch * inputWidth * inputHeight + xx * inputWidth + yy];
+                            float d = in[ch * inputWidth * inputHeight + xx * inputWidth + yy];
                             if (max < d) {
                                 max = d;
                                 maxX = xx;
@@ -101,7 +101,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
 
     @Override
     public String toString() {
-        return String.format("Max pooling:%s size:%dx%d stride:%d in:%dx%dx%d out %dx%dx%d",
+        return String.format("%s:Max pooling size:%dx%d stride:%d in:%dx%dx%d out %dx%dx%d",
                 name, this.size, this.size, this.stride,
                 this.inputWidth, this.inputHeight, this.inputChannels,
                 this.outputWidth, this.outputHeight, this.outputChannels);

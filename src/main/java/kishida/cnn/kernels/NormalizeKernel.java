@@ -31,7 +31,7 @@ public class NormalizeKernel extends Kernel {
         int y = chxy % inputHeight;
         //平均
         int count = 0;
-        double total = 0;
+        float total = 0;
         for (int i = 0; i < size; ++i) {
             int xx = x + i - size / 2;
             if (xx >= 0 && xx < inputWidth) {
@@ -44,41 +44,41 @@ public class NormalizeKernel extends Kernel {
                 }
             }
         }
-        double average = total / count;
+        float average = total / count;
         //分散
-        double variance = 0;
+        float variance = 0;
         for (int i = 0; i < size; ++i) {
             int xx = x + i - size / 2;
             if (xx >= 0 && xx < inputWidth) {
                 for (int j = 0; j < size; ++j) {
                     int yy = y + j - size / 2;
                     if (yy >= 0 && yy < inputHeight) {
-                        double d = input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                        float d = input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
                         variance += (d - average) * (d - average);
                     }
                 }
             }
         }
-        double std = max(threshold, sqrt(variance / count));
+        float std = max(threshold, sqrt(variance / count));
         result[chxy] = (input[chxy] - average) / std;
         averages[chxy] = average;
         rates[chxy] = std;
     }
-    double[] averages;
-    double[] rates;
-    double[] result;
-    double[] input;
+    float[] averages;
+    float[] rates;
+    float[] result;
+    float[] input;
     int inputChannels;
     int inputWidth;
     int inputHeight;
     int size;
-    double threshold;
+    float threshold;
 
-    public double[] normalize(double[] input, int inputChannels, int inputWidth, int inputHeight,
-            int size, double[] averages, double[] rates, double threshold, boolean useGpu) {
+    public float[] normalize(float[] input, int inputChannels, int inputWidth, int inputHeight,
+            int size, float[] averages, float[] rates, float threshold, boolean useGpu) {
         this.input = input;
         this.rates = rates;
-        this.result = new double[inputChannels * inputWidth * inputHeight];
+        this.result = new float[inputChannels * inputWidth * inputHeight];
         this.averages = averages;
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;

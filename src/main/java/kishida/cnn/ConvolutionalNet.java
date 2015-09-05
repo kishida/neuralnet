@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.DoubleToIntFunction;
 import java.util.stream.Collectors;
-import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import javax.imageio.ImageIO;
@@ -40,14 +39,17 @@ import javax.swing.JTabbedPane;
 import kishida.cnn.activation.RetifierdLinear;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
+import kishida.cnn.layers.LerningLayer;
 import kishida.cnn.layers.MultiNormalizeLayer;
+import kishida.cnn.util.FloatUtil;
 
 /**
  *
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final double ep = 0.0005;
+    private static final float learningRate = 0.01f;
+    private static final float weightDecay = 0.0005f;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
@@ -61,7 +63,7 @@ public class ConvolutionalNet {
     private static final int FILTER_COLS = 12;//FILTER_1ST / h;
     private static final int IMAGE_SIZE = 227;
     private static final int MINI_BATCH = 128;
-    private static final double MOMENTAM = 0.9;
+    private static final float MOMENTAM = 0.9f;
     static class Img{
 
         public Img(Path filename, boolean inverse, int x, int y) {
@@ -92,6 +94,7 @@ public class ConvolutionalNet {
     static LinkedList<Integer> rateData = new LinkedList<>();
 
     public static void main(String[] args) throws IOException {
+        System.setProperty("com.amd.aparapi.enableShowGeneratedOpenCL", "false");
         String def = "C:\\Users\\naoki\\Desktop\\sampleimg288";
         Path dir = Paths.get(args.length > 0 ? args[0] : def);
         List<String> categories = Files.list(dir)
@@ -122,10 +125,10 @@ public class ConvolutionalNet {
         Path avePath = dir.resolve(AVERAGE_PNG);
         BufferedImage aveImage;
         if(!Files.exists(avePath)){
-            double[] aveData = new double[IMAGE_SIZE * IMAGE_SIZE * 3];
+            float[] aveData = new float[IMAGE_SIZE * IMAGE_SIZE * 3];
             int imgCount = 0;
             for(Img img : files){
-                double[] imageArray = imageToArray(img.readImage());
+                float[] imageArray = imageToArray(img.readImage());
                 IntStream.range(0, imageArray.length).parallel().forEach( i -> {
                     aveData[i] += imageArray[i];
                 });
@@ -143,7 +146,7 @@ public class ConvolutionalNet {
             aveImage = ImageIO.read(avePath.toFile());
         }
         org.setIcon(new ImageIcon(aveImage));
-        double[] aveData = imageToArray(aveImage);
+        float[] aveData = imageToArray(aveImage);
 
         List<NeuralLayer> layers = new ArrayList<>();
         InputLayer input = new InputLayer(227, 227);
@@ -151,34 +154,34 @@ public class ConvolutionalNet {
 
         ImageNeuralLayer pre = input;
         //一段目
-        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, 0, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, 0, learningRate, USE_GPU1));
         //一段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool1", 3, 2, pre));
         //一段目の正規化
         //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
-        layers.add(pre = new MultiNormalizeLayer("norm1", 5, .000001, pre, USE_GPU1));
+        layers.add(pre = new MultiNormalizeLayer("norm1", 5, .000001f, pre, USE_GPU1));
         //二段目
-        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, 1, ep, USE_GPU2));
+        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, 1, learningRate, USE_GPU2));
         //二段目のプーリング
         layers.add(pre = new MaxPoolingLayer("pool2", 3, 2, pre));
 
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
-        layers.add(pre = new MultiNormalizeLayer("norm2", 5, .000001, pre, USE_GPU2));
+        layers.add(pre = new MultiNormalizeLayer("norm2", 5, .000001f, pre, USE_GPU2));
 
-        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, 0, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, 1, ep, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, 1, ep, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, 0, learningRate, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, 1, learningRate, USE_GPU1));
+        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, 1, learningRate, USE_GPU1));
         layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
 
         NeuralLayer npre = pre;
 
-        layers.add(npre = new FullyConnect("fc0", npre, 4096, 1, .5, new RetifierdLinear(), ep));
+        layers.add(npre = new FullyConnect("fc0", npre, 4096, 1, .5f, new RetifierdLinear(), learningRate, false));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 1, 0.5, new RetifierdLinear(), ep);
+        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 1, 0.5f, new RetifierdLinear(), learningRate, USE_GPU1);
         layers.add(npre = fc1);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, 1, new SoftMaxFunction(), ep);
+        FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, 1, new SoftMaxFunction(), learningRate, false);
         layers.add(npre = fc2);
 
         layers.forEach(System.out::println);
@@ -188,29 +191,29 @@ public class ConvolutionalNet {
         Collections.shuffle(files, random);
         long start = System.currentTimeMillis();
         long[] pStart = {start};
-        double[] readData = new double[3 * IMAGE_SIZE * IMAGE_SIZE];
+        float[] readData = new float[3 * IMAGE_SIZE * IMAGE_SIZE];
         for(Img img : files) {
             Path p = img.filename;
             String catName = p.getParent().getFileName().toString();
-            double[] correctData = DoubleStream.concat(categories.stream()
-                    .mapToDouble(name -> name.equals(catName) ? 1 : 0),
-                    DoubleStream.generate(() -> 0)).limit(categories.size())
-                    .toArray();
+            float[] correctData = new float[categories.size()];
+            for(int i = 0; i < categories.size(); ++i){
+                correctData[i] = categories.get(i).equals(catName) ? 1 : 0;
+            }
 
             BufferedImage resized = img.readImage();
-            //double[] readData = normalizeImage(imageToArray(resized));
+            //float[] readData = normalizeImage(imageToArray(resized));
             imageToArray(resized, readData);
             for(int i = 0; i < readData.length; ++i){
                 readData[i] -= aveData[i];
             }
 
-            double[] output = forward(layers, readData, correctData);
+            float[] output = forward(layers, readData, correctData);
             //元画像の表示
 
             org.setIcon(new ImageIcon(resized));
 
             //判定結果
-            double max = Double.NEGATIVE_INFINITY;
+            float max = Float.NEGATIVE_INFINITY;
             int maxIndex = -1;
             for(int i = 0; i < output.length; ++i) {
                 if (output[i] > max){
@@ -254,7 +257,7 @@ public class ConvolutionalNet {
 
             count[0]++;
             if(count[0] >= MINI_BATCH){
-                layers.forEach(layer -> layer.joinBatch(MINI_BATCH));
+                layers.forEach(layer -> layer.joinBatch(MINI_BATCH, weightDecay, learningRate));
                 for(int i = 0; i < conv1.getOutputChannels(); ++i){
                     filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
                             conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
@@ -279,6 +282,23 @@ public class ConvolutionalNet {
                         count[0], MINI_BATCH * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                         ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                         ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
+
+                for(NeuralLayer layer : layers){
+                    System.out.printf("%s result: %.2f～%.2f average %.2f ", layer.getName(),
+                            layer.getResultStatistics().getMin(),
+                            layer.getResultStatistics().getMax(),
+                            layer.getResultStatistics().getAverage());
+                    if(layer instanceof LerningLayer){
+                        DoubleSummaryStatistics ws = ((LerningLayer)layer).getWeightStatistics();
+                        System.out.printf("weight: %.2f～%.2f average %.2f ",
+                                ws.getMin(), ws.getMax(), ws.getAverage());
+                        DoubleSummaryStatistics bs = ((LerningLayer)layer).getBiasStatistics();
+                        System.out.printf("bias: %.2f～%.2f average %.2f ",
+                                bs.getMin(), bs.getMax(), bs.getAverage());
+                    }
+                    System.out.println();
+                }
+
                 count[0] = 0;
                 pStart[0] = System.currentTimeMillis();
                 layers.forEach(layer -> layer.prepareBatch(MOMENTAM));
@@ -291,12 +311,12 @@ public class ConvolutionalNet {
     }
     public static final String AVERAGE_PNG = "average.png";
 
-    static Image createGraph(int width, int height, double[] data){
+    static Image createGraph(int width, int height, float[] data){
         BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = (Graphics2D) result.getGraphics();
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, height);
-        DoubleSummaryStatistics summary = Arrays.stream(data).summaryStatistics();
+        DoubleSummaryStatistics summary = FloatUtil.summary(data);
         DoubleToIntFunction f = d -> (int)(height -
                 (d - summary.getMin()) / (summary.getMax() - summary.getMin()) * height);
         g.setColor(Color.BLACK);
@@ -311,7 +331,7 @@ public class ConvolutionalNet {
         g.dispose();
         return result;
     }
-    static Image createLineGraph(int width, int height, double[] data, double max, double min){
+    static Image createLineGraph(int width, int height, double[] data, float max, float min){
         BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = (Graphics2D) result.getGraphics();
         g.setColor(Color.WHITE);
@@ -394,18 +414,22 @@ public class ConvolutionalNet {
         return f;
     }
 
-    static double[] forward(List<NeuralLayer> layers, double[] readData, double[] correctData){
+    static float[] forward(List<NeuralLayer> layers, float[] readData, float[] correctData){
         ((InputLayer)layers.get(0)).setInput(readData);
         for(int i = 1; i < layers.size(); ++i){
             //layers.get(i).preLayer = layers.get(i - 1);
             layers.get(i).forward();
         }
-        double[] output = layers.get(layers.size() - 1).getResult();
+        float[] output = layers.get(layers.size() - 1).getResult();
+        if (!FloatUtil.toDoubleStream(output).allMatch(d -> Double.isFinite(d))) {
+            throw new RuntimeException("there is infinite value");
+        }
+
         //誤差を求める
-        double[] delta = IntStream.range(0, output.length)
-                .mapToDouble(idx -> correctData[idx] - output[idx])
-                //.map(d -> -d)
-                .toArray();
+        float[] delta = new float[output.length];
+        for(int idx = 0; idx < output.length; ++idx){
+            delta[idx] = correctData[idx] - output[idx];
+        }
         //逆伝播
         for(int i = layers.size() - 1; i >= 1; --i){
             delta = layers.get(i).backward(delta);
@@ -413,14 +437,14 @@ public class ConvolutionalNet {
 
         return output;
     }
-    static void printDim(String name, double[][][] data){
+    static void printDim(String name, float[][][] data){
         System.out.printf("%s:%dx%dx%d%n", name,
                 data[0].length, data[0][0].length, data.length);
     }
-    static void printData(double[][] data){
+    static void printData(float[][] data){
         System.out.println(Arrays.stream(data)
-                .map(da -> Arrays.stream(da)
-                        .mapToObj(d -> String.format("%.3f", d))
+                .map(da -> IntStream.range(0, da.length)
+                        .mapToObj(d -> String.format("%.3f", da[d]))
                         .collect(Collectors.joining(",")))
                 .collect(Collectors.joining("\n")));
     }
@@ -465,19 +489,18 @@ public class ConvolutionalNet {
         return img;
     }
 
-    static BufferedImage arrayToImage(double[] filteredData, int idx, int width, int height) {
+    static BufferedImage arrayToImage(float[] filteredData, int idx, int width, int height) {
         return arrayToImage(filteredData, idx, width, height, 1);
     }
 
-    static BufferedImage arrayToImage(double[] filteredData, int idx, int width, int height, double rate) {
-        DoubleSummaryStatistics summary = Arrays.stream(filteredData,
-                idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
-                .summaryStatistics();
-        double[] normed = Arrays.stream(filteredData,
-                idx * 3 * width * height, (idx + 1) * 3 * width * height).parallel()
-                        .map(d -> (d - summary.getMin())
-                                / (summary.getMax() - summary.getMin()))
-                        .toArray();
+    static BufferedImage arrayToImage(float[] filteredData, int idx, int width, int height, float rate) {
+        DoubleSummaryStatistics summary = FloatUtil.summary(filteredData,
+                idx * 3 * width * height, (idx + 1) * 3 * width * height);
+        double[] normed = IntStream.range(idx * 3 * width * height, (idx + 1) * 3 * width * height)
+                .parallel()
+                .mapToDouble(i -> (filteredData[i] - summary.getMin())
+                        / (summary.getMax() - summary.getMin()))
+                .toArray();
         //rate = 1;
         BufferedImage filtered = new BufferedImage(
                 width, height,
@@ -485,14 +508,14 @@ public class ConvolutionalNet {
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
                 filtered.setRGB(x, y,
-                        ((int)clip(normed[x * height + y] * rate * 255) << 16) +
-                        ((int)clip(normed[x * height + y + width * height] * rate * 255) << 8) +
-                         (int)clip(normed[x * height + y + 2 * width * height] * rate * 255));
+                        (clip(normed[x * height + y] * rate * 255) << 16) +
+                        (clip(normed[x * height + y + width * height] * rate * 255) << 8) +
+                         clip(normed[x * height + y + 2 * width * height] * rate * 255));
             }
         }
         return filtered;
     }
-    static BufferedImage arrayToImageStraight(double[] filteredData, int width, int height){
+    static BufferedImage arrayToImageStraight(float[] filteredData, int width, int height){
         BufferedImage filtered = new BufferedImage(
                 width, height,
                 BufferedImage.TYPE_INT_RGB);
@@ -507,12 +530,12 @@ public class ConvolutionalNet {
         return filtered;
 
     }
-    static BufferedImage arrayToImageMono(double[] filteredData, int idx, int width, int height){
-        double[] colorData = new double[width * height * 3];
+    static BufferedImage arrayToImageMono(float[] filteredData, int idx, int width, int height){
+        float[] colorData = new float[width * height * 3];
         IntStream.range(0, width).parallel().forEach(x -> {
             for(int y = 0; y < height; ++y){
                 int i = x * height + y;
-                double c = filteredData[idx * width * height + i];
+                float c = filteredData[idx * width * height + i];
                 colorData[i] = c;
                 colorData[i + width * height] = c;
                 colorData[i + width * height * 2] = c;
@@ -521,42 +544,43 @@ public class ConvolutionalNet {
         return arrayToImage(colorData, 0, width, height);
     }
     /** 画像から配列へ変換 */
-    private static double[] imageToArray(BufferedImage img) {
-        double[] imageData = new double[3 * img.getWidth() * img.getHeight()];
+    private static float[] imageToArray(BufferedImage img) {
+        float[] imageData = new float[3 * img.getWidth() * img.getHeight()];
         imageToArray(img, imageData);
         return imageData;
     }
     /** 画像から配列へ変換 */
-    private static void imageToArray(BufferedImage img, double[] imageData) {
+    private static void imageToArray(BufferedImage img, float[] imageData) {
         int width = img.getWidth();
         int height = img.getHeight();
         for(int x = 0; x < width; ++x){
             for(int y = 0; y < height; ++y){
                 int rgb = img.getRGB(x, y);
                 int pos = x * height + y;
-                imageData[pos] = (rgb >> 16 & 0xff) / 255.;
-                imageData[pos + width * height] = (rgb >> 8 & 0xff) / 255.;
-                imageData[pos + 2 * width * height] = (rgb & 0xff) / 255.;
+                imageData[pos] = (rgb >> 16 & 0xff) / 255.f;
+                imageData[pos + width * height] = (rgb >> 8 & 0xff) / 255.f;
+                imageData[pos + 2 * width * height] = (rgb & 0xff) / 255.f;
             }
         }
     }
-    static double[] normalizeImage(double[] data){
+    static float[] normalizeImage(float[] data){
         int size = data.length / 3;
-        double[] result = new double[data.length];
+        float[] result = new float[data.length];
         for(int i = 0; i < 3; ++i){
             int start = i * size;
             int end = start + size;
             // 平均
-            DoubleSummaryStatistics sum = Arrays.stream(data, start, end).parallel().summaryStatistics();
+            DoubleSummaryStatistics sum = FloatUtil.summary(data, start, end);
             // 分散
-            double dist = Math.sqrt(Arrays.stream(data, start, end).parallel()
+            float dist = (float)Math.sqrt(IntStream.range(start, end).parallel().mapToDouble(idx -> data[idx])
                     .map(d -> (d - sum.getAverage()) * (d - sum.getAverage()))
                     .sum() / sum.getCount());
             // 正規化
             for(int j = start; j < end; ++j){
-                result[j] = (data[j] - sum.getAverage()) / dist;
+                result[j] = (float)(data[j] - sum.getAverage()) / dist;
             }
         }
         return result;
     }
+
 }

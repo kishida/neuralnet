@@ -5,119 +5,118 @@
  */
 package kishida.cnn.layers;
 
-import java.util.Arrays;
-import java.util.stream.DoubleStream;
+import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.ActivationFunction;
+import kishida.cnn.kernels.FullyForwardKernel;
+import kishida.cnn.util.FloatUtil;
 
 /**
  *
  * @author naoki
  */
-public class FullyConnect extends NeuralLayer {
-    double[][] weight;
-    double[] bias;
-    double[][] weightDelta;
-    double[] biasDelta;
+public class FullyConnect extends NeuralLayer implements LerningLayer{
+    float[]weight;
+    float[] bias;
+    float[]weightDelta;
+    float[] biasDelta;
     int out;
     int in;
     int[] dropout;
-    double dropoutRate = 1;
-    double localEp;
+    float dropoutRate = 1;
+    float learningRate;
+    boolean useGpu;
 
-    public FullyConnect(String name, NeuralLayer preLayer, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep) {
-        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, ep);
+    public FullyConnect(String name, NeuralLayer preLayer, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
+        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, learningRate, useGpu);
         this.preLayer = preLayer;
     }
 
-    public FullyConnect(String name, int in, int out, double initBias, double dropoutRate, ActivationFunction activation, double ep) {
+    public FullyConnect(String name, int in, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
         this(name, in, out,
-                Stream.generate(() -> IntStream.range(0, out)// ここをparallelにすると、nextDoubleで同期化されて遅くなる
-                        .mapToDouble(d -> ConvolutionalNet.random.nextGaussian() * 0.01)
-                        .toArray()).limit(in).toArray(double[][]::new),
-                DoubleStream.generate(() -> initBias).limit(out).toArray()
-                , dropoutRate, ep, activation);
+                FloatUtil.createGaussianArray(in * out, 0.01f, ConvolutionalNet.random),
+                FloatUtil.createArray(out, initBias),
+                dropoutRate, learningRate, activation, useGpu);
     }
 
-    public FullyConnect(String name, int in, int out, double[][] weight,
-            double[] bias, double dropoutRate, double localEp, ActivationFunction activation) {
+    public FullyConnect(String name, int in, int out, float[] weight,
+            float[] bias, float dropoutRate, float learningRate, ActivationFunction activation, boolean useGpu) {
         super(name, activation);
         this.name = name;
         this.in = in;
         this.out = out;
         this.weight = weight;
         this.bias = bias;
-        this.weightDelta = new double[in][out];
-        this.biasDelta = new double[out];
-        this.localEp = localEp;
+        this.weightDelta = new float[in * out];
+        this.biasDelta = new float[out];
+        this.learningRate = learningRate;
         this.dropout = IntStream.generate(() -> 1).limit(out).toArray();
         this.dropoutRate = dropoutRate;
         this.weight = weight;
         this.bias = bias;
+        this.useGpu = useGpu;
     }
 
     public void prepareDropout() {
-        dropout = ConvolutionalNet.random.doubles(out).mapToInt((d) -> d < dropoutRate ? 1 : 0).toArray();
+        dropout = ConvolutionalNet.random.doubles(out).mapToInt(d -> d < dropoutRate ? 1 : 0).toArray();
     }
 
     @Override
-    public double[] forward(double[] in) {
+    public float[] forward(float[] in) {
         prepareDropout();
-        result = new double[out];
-        IntStream.range(0, out).parallel().filter((j) -> dropout[j] == 1).forEach((j) -> {
+        result = new float[out];
+
+        FullyForwardKernel.INSTANCE.forward(out, dropout, in, result, weight, bias, useGpu);
+        /*
+        IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
             for (int i = 0; i < in.length; ++i) {
-                result[j] += in[i] * weight[i][j];
+                result[j] += in[i] * weight[i * out + j];
             }
             result[j] += bias[j];
-        });
+        });*/
         activation.applyAfter(result);
-        if (!Arrays.stream(result).allMatch(Double::isFinite)) {
-            System.out.println("there is infinite value");
-            System.out.println(Arrays.toString(result));
-        }
         return result;
     }
 
     @Override
-    public double[] backward(double[] in, double[] delta) {
+    public float[] backward(float[] in, float[] delta) {
         /*
-        double[][] oldweight = Arrays.stream(weight).parallel()
+        float[][] oldweight = Arrays.stream(weight).parallel()
         .map(row -> Arrays.copyOf(row, row.length))
-        .toArray(double[][]::new);*/
-        double[] newDelta = new double[in.length];
-        double[] diffed = Arrays.stream(result).map(activation::diff).toArray();
+        .toArray(float[][]::new);*/
+        float[] newDelta = new float[in.length];
+        float[] diffed = new float[result.length];
+        for(int i = 0; i < result.length; ++i){
+                diffed[i] = activation.diff(result[i]);
+        }
         IntStream.range(0, in.length).parallel().forEach((i) -> {
             for (int j = 0; j < out; ++j) {
                 if (dropout[j] != 1) {
                     continue;
                 }
-                double d = diffed[j] * delta[j];
-                newDelta[i] += d * in[i] * weight[i][j];
-                weightDelta[i][j] += d * in[i] * localEp;
+                float d = diffed[j] * delta[j];
+                newDelta[i] += d *  weight[i * out + j];//in[i] *;
+                weightDelta[i * out + j] += d * in[i] * learningRate;
             }
         });
-        IntStream.range(0, out).parallel().filter((j) -> dropout[j] == 1).forEach((j) -> {
-            biasDelta[j] += diffed[j] * delta[j] * localEp;
+        IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
+            biasDelta[j] += diffed[j] * delta[j] * learningRate;
         });
         return newDelta;
     }
 
     @Override
-    public void prepareBatch(double momentam) {
-        Arrays.stream(weightDelta).parallel().forEach(row -> {
-            IntStream.range(0, row.length).forEach(i -> row[i] = row[i] * momentam);
-        });
+    public void prepareBatch(float momentam) {
+        IntStream.range(0, weightDelta.length).forEach(i -> weightDelta[i] = weightDelta[i] * momentam);
         IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
     }
 
     @Override
-    public void joinBatch(int count) {
-        IntStream.range(0, weight.length).parallel().forEach(i -> {
-            for(int j = 0; j < weight[i].length; ++j){
-                weight[i][j] += weightDelta[i][j] / count;
-            }
+    public void joinBatch(int count, float weightDecay, float learningRate) {
+        IntStream.range(0, weight.length).parallel().forEach(ij -> {
+                weight[ij] += weightDelta[ij] / count
+                        - weight[ij] * weightDecay * learningRate;
         });
         IntStream.range(0, bias.length).parallel().forEach(i -> {
             bias[i] += biasDelta[i] / count;
@@ -129,13 +128,23 @@ public class FullyConnect extends NeuralLayer {
         return out;
     }
 
-    public double[] getBias() {
+    public float[] getBias() {
         return bias;
     }
 
     @Override
     public String toString() {
-        return String.format("Fully connect:%s %d->%d dropout:%.2f", name, in, out, dropoutRate);
+        return String.format("%s:Fully connect %d->%d dropout:%.2f", name, in, out, dropoutRate);
+    }
+
+    @Override
+    public DoubleSummaryStatistics getWeightStatistics() {
+        return FloatUtil.summary(weight);
+    }
+
+    @Override
+    public DoubleSummaryStatistics getBiasStatistics() {
+        return FloatUtil.summary(bias);
     }
 
 }

@@ -9,13 +9,13 @@ package kishida.cnn.activation;
 public class RetifierdLinear extends ActivationFunction {
 
     @Override
-    public double apply(double value) {
-        return value > 0 ? value : 0;
+    public float apply(float value) {
+        return value >= 0 ? value : 0;
     }
 
     @Override
-    public double diff(double value) {
-        return value > 0 ? 1 : 0;
+    public float diff(float value) {
+        return value >= 0 ? 1 : 0;
     }
 
 }

@@ -30,7 +30,7 @@ public class ConvolutionForwardKernel extends Kernel {
         int f = fxy / (outputHeight * outputWidth);
         int x = (fxy % (outputHeight * outputWidth)) / outputHeight;
         int y = fxy % outputHeight;
-        double r = 0; // 毎回resultを足すよりもまとめて足したほうがGPUの場合に速くなる。
+        float r = 0; // 毎回resultを足すよりもまとめて足したほうがGPUの場合に速くなる。
         for (int ch = 0; ch < inputChannels; ++ch) {
             for (int i = 0; i < filterSize; ++i) {
                 int xx = x * stride + i - filterSize / 2;
@@ -48,22 +48,22 @@ public class ConvolutionForwardKernel extends Kernel {
         }
         result[fxy] = r + bias[f];
     }
-    double[] result;
-    double[] input;
+    float[] result;
+    float[] input;
     int inputChannels;
     int inputWidth;
     int inputHeight;
-    double[] filter;
+    float[] filter;
     int outputChannels;
     int outputWidth;
     int outputHeight;
     int filterSize;
     int stride;
-    double[] bias;
+    float[] bias;
 
-    public double[] forward(double[] input, int inputChannels, int inputWidth, int inputHeight,
-            double[] filter, int outputChannels, int outputWidth, int outputHeight, double[] result,
-            int filterSize, int stride, double[] bias, ActivationFunction activation, boolean useGpu) {
+    public float[] forward(float[] input, int inputChannels, int inputWidth, int inputHeight,
+            float[] filter, int outputChannels, int outputWidth, int outputHeight, float[] result,
+            int filterSize, int stride, float[] bias, ActivationFunction activation, boolean useGpu) {
         this.input = input;
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;

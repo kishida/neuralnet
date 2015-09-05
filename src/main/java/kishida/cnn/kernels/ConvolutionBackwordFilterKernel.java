@@ -30,40 +30,40 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
         int ch = (fchij % (inputChannels * filterSize * filterSize)) / (filterSize * filterSize);
         int i = (fchij % (filterSize * filterSize)) / filterSize;
         int j = fchij % filterSize;
-        double df = 0;
+        float df = 0;
         for (int x = 0; x < outputWidth; ++x) {
             for (int y = 0; y < outputHeight; ++y) {
                 int fxy = f * outputWidth * outputHeight + x * outputHeight + y;
-                double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
+                float d = result[fxy] >= 0 ? delta[fxy] : 0;
                 int xx = x * stride + i - filterSize / 2;
                 if (xx >= 0 && xx < inputWidth) {
                     int yy = y * stride + j - filterSize / 2;
                     if (yy >= 0 && yy < inputHeight) {
-                        df += d * localEp * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
+                        df += d * learningRate * input[ch * inputWidth * inputHeight + xx * inputHeight + yy];
                     }
                 }
             }
         }
         filter[fchij] += df;
     }
-    double[] input;
-    double[] result;
-    double[] delta;
+    float[] input;
+    float[] result;
+    float[] delta;
     int inputChannels;
     int inputWidth;
     int inputHeight;
-    double[] filter;
+    float[] filter;
     int outputChannels;
     int outputWidth;
     int outputHeight;
     int filterSize;
     int stride;
-    double localEp;
+    float learningRate;
 
-    public void backword(double[] delta, double[] result,
-            double[] input, int inputChannels, int inputWidth, int inputHeight,
-            double[] filter, int outputChannels, int outputWidth, int outputHeight,
-            int filterSize, int stride, double ep, boolean useGpu) {
+    public void backword(float[] delta, float[] result,
+            float[] input, int inputChannels, int inputWidth, int inputHeight,
+            float[] filter, int outputChannels, int outputWidth, int outputHeight,
+            int filterSize, int stride, float learningRate, boolean useGpu) {
         this.input = input;
         this.delta = delta;
         this.inputChannels = inputChannels;
@@ -76,7 +76,7 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
         this.filterSize = filterSize;
         this.stride = stride;
         this.result = result;
-        this.localEp = ep / (outputWidth * outputHeight);
+        this.learningRate = learningRate;// / outputWidth;// * outputHeight);
         if (useGpu) {
             put(delta);
             put(filter);

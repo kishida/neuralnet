@@ -16,7 +16,7 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
     public static ConvolutionBackwordBiasKernel INSTANCE = new ConvolutionBackwordBiasKernel();
 
     private ConvolutionBackwordBiasKernel() {
-        setExplicit(true);
+        //setExplicit(true);
     }
 
     @Override
@@ -24,28 +24,30 @@ public class ConvolutionBackwordBiasKernel extends Kernel {
         int fxy = getGlobalId();
         proc(fxy);
     }
-    double[] result;
-    double[] delta;
-    double localEp;
-    double[] tempBiasDelta;
+    float[] result;
+    float[] delta;
+    float learningRate;
+    float[] tempBiasDelta;
 
     private void proc(int fxy) {
-        double d = (result[fxy] > 0 ? 1 : 0) * delta[fxy];
-        tempBiasDelta[fxy] = localEp * d;
+        float d = result[fxy] >= 0 ? delta[fxy] : 0;
+        //float d = (result[fxy] >= 0 ? 1 : 0) * delta[fxy]; // GPUで*delta[fxy]が無視された・・・
+        //こうなる。 float d = (float)(this->result[fxy]>=0.0f)?1:0 * this->delta[fxy];
+        tempBiasDelta[fxy] = learningRate * d;
     }
 
-    public void backwordBias(double[] delta, double[] result,
+    public void backwordBias(float[] delta, float[] result,
             int outputChannels, int outputWidth, int outputHeight,
-            double[] bias, double ep, double[] tempBiasDelta, boolean useGpu) {
+            float[] bias, float learningRate, float[] tempBiasDelta, boolean useGpu) {
         this.delta = delta;
         this.result = result;
-        this.localEp = ep / (outputWidth * outputHeight);
+        this.learningRate = learningRate;// / outputWidth;// * outputHeight);
         this.tempBiasDelta = tempBiasDelta;
         if (useGpu) {
-            put(delta);
-            put(result);
+            //put(delta);
+            //put(result);
             execute(outputChannels * outputWidth * outputHeight);
-            get(tempBiasDelta);
+            //get(tempBiasDelta);
             IntStream.range(0, outputChannels).parallel().forEach(f -> {
                 for (int xy = 0; xy < outputWidth * outputHeight; ++xy) {
                     bias[f] += tempBiasDelta[f * outputWidth * outputHeight + xy];

@@ -208,9 +208,7 @@ public class NeuralNetwork {
 "      \"weightDelta\" : [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ],\n" +
 "      \"biasDelta\" : [ 0.0, 0.0, 0.0 ],\n" +
 "      \"dropoutRate\" : 1.0,\n" +
-"      \"activation\" : {\n" +
-"        \"LogisticFunction\" : { }\n" +
-"      },\n" +
+"      \"activation\" : \"LogisticFunction\",\n" +
 "      \"useGpu\" : true\n" +
 "    }\n" +
 "  } ],\n" +

@@ -41,13 +41,13 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private float dropoutRate = 1;
     @Getter
     private boolean useGpu;
-    @Getter
+
     private ActivationFunction activation;
     @Getter
     private float initBias;
 
     public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, boolean useGpu) {
-        this(name, outputSize, null, null, initBias, null, null, dropoutRate,  activation, useGpu);
+        this(name, outputSize, null, null, initBias, null, null, dropoutRate, null, activation, useGpu);
     }
 
     @JsonCreator
@@ -60,11 +60,21 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
             @JsonProperty("weightDelta") float[] weightDelta,
             @JsonProperty("biasDelta") float[] biasDelta,
             @JsonProperty("dropoutRate") float dropoutRate,
-            @JsonProperty("activation") ActivationFunction activation,
+            @JsonProperty("activation") String activationName,
+            @JsonProperty("activationObj") ActivationFunction activation,
             @JsonProperty("useGpu") boolean useGpu) {
         super(name);
         this.name = name;
-        this.activation = activation;
+        if(activation != null){
+            this.activation = activation;
+        }else{
+            try {
+                this.activation = (ActivationFunction) FullyConnect.class.forName(
+                        ActivationFunction.class.getPackage().getName() + "." + activationName).newInstance();
+            } catch (ClassNotFoundException | InstantiationException | IllegalAccessException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
         this.outputSize = outputSize;
         this.weight = weight;
         this.weightDelta = weightDelta;
@@ -95,6 +105,16 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         if(biasDelta == null){
             this.biasDelta = new float[outputSize];
         }
+    }
+
+    @JsonProperty("activationObj")
+    public ActivationFunction getActivation() {
+        return activation;
+    }
+
+    @JsonProperty("activation")
+    public String getActivationName(){
+        return activation.getClass().getSimpleName();
     }
 
     public void prepareDropout() {

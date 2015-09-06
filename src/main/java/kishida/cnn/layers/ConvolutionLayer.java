@@ -50,12 +50,6 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         this(name, size, filterCount, stride, null, null, initBias, null, null, learningRate, useGpu);
     }
 
-    public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
-            int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
-        this(name, size, filterCount, stride, null, null, initBias, null, null, learningRate, useGpu);
-        setPreLayer(preLayer);
-    }
-
     @JsonCreator
     public ConvolutionLayer(
             @JsonProperty("name") String name,

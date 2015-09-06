@@ -22,11 +22,6 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
     int stride;
     float[] newDelta;
 
-    public MaxPoolingLayer(String name, int size, int stride, ImageNeuralLayer preLayer) {
-        this(name, size, stride);
-        setPreLayer(preLayer);
-    }
-
     @JsonCreator
     public MaxPoolingLayer(
             @JsonProperty("name") String name,

@@ -152,38 +152,37 @@ public class ConvolutionalNet {
         InputLayer input = new InputLayer(227, 227);
         layers.add(input);
 
-        ImageNeuralLayer pre = input;
         //一段目
-        layers.add(pre = new ConvolutionLayer("conv1", pre, FILTER_1ST, FILTER_1ST_SIZE, 4, 0, learningRate, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv1", FILTER_1ST, FILTER_1ST_SIZE, 4, 0, learningRate, USE_GPU1));
         //一段目のプーリング
-        layers.add(pre = new MaxPoolingLayer("pool1", 3, 2, pre));
+        layers.add(new MaxPoolingLayer("pool1", 3, 2));
         //一段目の正規化
         //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
-        layers.add(pre = new MultiNormalizeLayer("norm1", 5, .000001f, pre, USE_GPU1));
+        layers.add(new MultiNormalizeLayer("norm1", 5, .000001f, USE_GPU1));
         //二段目
-        layers.add(pre = new ConvolutionLayer("conv2", pre, FILTER_2ND, 5, 1, 1, learningRate, USE_GPU2));
+        layers.add(new ConvolutionLayer("conv2", FILTER_2ND, 5, 1, 1, learningRate, USE_GPU2));
         //二段目のプーリング
-        layers.add(pre = new MaxPoolingLayer("pool2", 3, 2, pre));
+        layers.add(new MaxPoolingLayer("pool2", 3, 2));
 
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
-        layers.add(pre = new MultiNormalizeLayer("norm2", 5, .000001f, pre, USE_GPU2));
+        layers.add(new MultiNormalizeLayer("norm2", 5, .000001f, USE_GPU2));
 
-        layers.add(pre = new ConvolutionLayer("conv3", pre, 384, 3, 1, 0, learningRate, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv4", pre, 384, 3, 1, 1, learningRate, USE_GPU1));
-        layers.add(pre = new ConvolutionLayer("conv5", pre, 256, 3, 1, 1, learningRate, USE_GPU1));
-        layers.add(pre = new MaxPoolingLayer("pool5", 3, 2, pre));
-
-        NeuralLayer npre = pre;
-
-        layers.add(npre = new FullyConnect("fc0", npre, 4096, 1, .5f, new RetifierdLinear(), learningRate, false));
+        layers.add(new ConvolutionLayer("conv3", 384, 3, 1, 0, learningRate, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv4", 384, 3, 1, 1, learningRate, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv5", 256, 3, 1, 1, learningRate, USE_GPU1));
+        layers.add(new MaxPoolingLayer("pool5", 3, 2));
+        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RetifierdLinear(), learningRate, false));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", npre, FULL_1ST, 1, 0.5f, new RetifierdLinear(), learningRate, USE_GPU1);
-        layers.add(npre = fc1);
+        FullyConnect fc1 = new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RetifierdLinear(), learningRate, USE_GPU1);
+        layers.add(fc1);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", npre, categories.size(), 1, 1, new SoftMaxFunction(), learningRate, false);
-        layers.add(npre = fc2);
+        FullyConnect fc2 = new FullyConnect("fc2", categories.size(), 1, 1, new SoftMaxFunction(), learningRate, false);
+        layers.add(fc2);
 
+        for(int i = 1; i < layers.size(); ++i){
+            layers.get(i).setPreLayer(layers.get(i - 1));
+        }
         layers.forEach(System.out::println);
 
         int[] count = {0};

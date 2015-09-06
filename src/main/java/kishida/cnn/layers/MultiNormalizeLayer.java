@@ -25,11 +25,6 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
     float[] averages;
     float[] rates;
 
-    public MultiNormalizeLayer(String name, int size, float threshold, ImageNeuralLayer preLayer, boolean useGpu) {
-        this(name, size, threshold, useGpu);
-        setPreLayer(preLayer);
-    }
-
     @JsonCreator
     public MultiNormalizeLayer(
             @JsonProperty("name") String name,

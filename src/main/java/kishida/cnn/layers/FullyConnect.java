@@ -31,7 +31,6 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @JsonProperty
     private int outputSize;
-    @Getter
     private int inputSize;
     private int[] dropout;
     @Getter
@@ -42,26 +41,11 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     @Getter
     private ActivationFunction activation;
 
-    public FullyConnect(String name, NeuralLayer preLayer, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
-        this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, learningRate, useGpu);
-        setPreLayer(preLayer);
+
+    public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
+        this(name, outputSize, null, null, initBias, null, null, dropoutRate, learningRate, activation, useGpu);
     }
 
-    public FullyConnect(String name, int in, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
-        this(name, in, out,
-                FloatUtil.createGaussianArray(in * out, 0.01f, ConvolutionalNet.random),
-                FloatUtil.createArray(out, initBias),
-                dropoutRate, learningRate, activation, useGpu);
-    }
-
-    public FullyConnect(String name, int in, int out, float[] weight,
-            float[] bias, float dropoutRate, float learningRate,
-            ActivationFunction activation, boolean useGpu) {
-        this(name, out, weight, bias, 0,
-                new float[in * out],  new float[out],
-                dropoutRate, learningRate,
-                activation, useGpu);
-    }
     @JsonCreator
     public FullyConnect(
             @JsonProperty("name") String name,
@@ -97,6 +81,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.useGpu = useGpu;
     }
 
+    @Override
     public final void setPreLayer(NeuralLayer preLayer) {
         this.preLayer = preLayer;
         this.inputSize = preLayer.getOutputSize();

@@ -87,7 +87,7 @@ public class NeuralNetwork {
                 new ConvolutionLayer("conv1", 3, 7, 2, 1, .2f, true),
                 new MaxPoolingLayer("pool", 3, 2),
                 new MultiNormalizeLayer("norm1", 5, .0001f, true),
-                new FullyConnect("test", 3, 3, 0, 1, new LogisticFunction(), .001f, true)));
+                new FullyConnect("test", 3, 0, 1, new LogisticFunction(), .001f, true)));
         nn.init();
         StringWriter sw = new StringWriter();
         nn.writeAsJson(sw);
@@ -141,8 +141,7 @@ public class NeuralNetwork {
 "      \"activation\" : {\n" +
 "        \"LogisticFunction\" : { }\n" +
 "      },\n" +
-"      \"useGpu\" : true,\n" +
-"      \"inputSize\" : 0\n" +
+"      \"useGpu\" : true\n" +
 "    }\n" +
 "  } ],\n" +
 "  \"learningRate\" : 0.01\n" +

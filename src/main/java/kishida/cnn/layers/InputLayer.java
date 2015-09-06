@@ -5,7 +5,8 @@
  */
 package kishida.cnn.layers;
 
-import kishida.cnn.activation.LinearFunction;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  *
@@ -13,8 +14,24 @@ import kishida.cnn.activation.LinearFunction;
  */
 public class InputLayer extends ImageNeuralLayer {
 
-    public InputLayer(int width, int height) {
-        super("入力", new LinearFunction(), 0, 0, 0, 3, width, height);
+    @JsonCreator
+    public InputLayer(
+            @JsonProperty("width") int width,
+            @JsonProperty("height") int height) {
+        super("input", 0, 0, 0, 3, width, height);
+    }
+
+    @Override
+    public void setPreLayer(NeuralLayer preLayer) {
+        // do nothing
+    }
+
+    public int getWidth() {
+        return super.outputWidth;
+    }
+
+    public int getHeight() {
+        return super.outputHeight;
     }
 
     @Override

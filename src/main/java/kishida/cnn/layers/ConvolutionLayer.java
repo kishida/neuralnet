@@ -6,10 +6,13 @@
 package kishida.cnn.layers;
 
 import com.amd.aparapi.Kernel;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.ConvolutionalNet;
+import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.activation.RetifierdLinear;
 import kishida.cnn.kernels.ConvolutionBackwordBiasKernel;
 import kishida.cnn.kernels.ConvolutionBackwordDeltaKernel;
@@ -18,37 +21,89 @@ import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
 import kishida.cnn.util.FloatUtil;
+import lombok.Getter;
 
 /** 畳み込み層 */
 public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
-    float[] filter;
-    float[] bias;
-    float[] filterDelta;
-    float[] biasDelta;
-    int stride;
-    int filterSize;
-    boolean useGpu;
-    float learningRate;
 
-    public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
+    @Getter
+    float[] filter;
+    @Getter
+    float[] bias;
+    @Getter
+    float[] filterDelta;
+    @Getter
+    float[] biasDelta;
+    @Getter
+    int stride;
+    @Getter
+    int filterSize;
+    private ActivationFunction activation;
+    @Getter
+    boolean useGpu;
+
+    float learningRate;
+    float[] tempDelta;
+
+    public ConvolutionLayer(String name,
             int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
-        this(name, preLayer, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputWidth,
-                filterCount, size, stride, initBias, learningRate, useGpu);
+        this(name, size, filterCount, stride, null, null, initBias, null, null, learningRate, useGpu);
     }
 
     public ConvolutionLayer(String name, ImageNeuralLayer preLayer,
-            int channel, int width, int height, int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
-        super(name, new RetifierdLinear(), channel, width, height, filterCount, width / stride, height / stride);
-        this.learningRate = learningRate;
-        this.preLayer = preLayer;
-        this.filter = FloatUtil.createGaussianArray(size * size * channel * filterCount, 0.01f, ConvolutionalNet.random);
-        this.bias = new float[filterCount];
-        Arrays.fill(bias, initBias);
-        this.filterDelta = new float[filter.length];
-        this.biasDelta = new float[bias.length];
+            int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
+        this(name, size, filterCount, stride, null, null, initBias, null, null, learningRate, useGpu);
+        setPreLayer(preLayer);
+    }
+
+    @JsonCreator
+    public ConvolutionLayer(
+            @JsonProperty("name") String name,
+            @JsonProperty("filterSize") int filterSize,
+            @JsonProperty("filterCount") int filterCount,
+            @JsonProperty("stride") int stride,
+            @JsonProperty("filter") float[] filter,
+            @JsonProperty("filterDelta") float[] filterDelta,
+            @JsonProperty("initBias") float initBias,
+            @JsonProperty("bias") float[] bias,
+            @JsonProperty("biasDelta") float[] biasDelta,
+            @JsonProperty("learningRate") float learningRate,
+            @JsonProperty("useGpu") boolean useGpu) {
+        super(name);
+        this.filterSize = filterSize;
+        this.outputChannels = filterCount;
         this.stride = stride;
-        this.filterSize = size;
+        this.filter = filter;
+        this.filterDelta = filterDelta;
+        if(bias == null){
+            this.bias = FloatUtil.createArray(outputChannels, initBias);
+        }else{
+            this.bias = bias;
+        }
+        if(biasDelta == null){
+            this.biasDelta = new float[this.bias.length];
+        }else{
+            this.biasDelta = biasDelta;
+        }
+        this.activation = new RetifierdLinear();
+        this.learningRate = learningRate;
         this.useGpu = useGpu;
+    }
+
+    public int getFilterCount() {
+        return super.getOutputChannels();
+    }
+
+    @Override
+    public final void setPreLayer(NeuralLayer preLayer) {
+        super.setPreLayer(preLayer);
+        outputWidth = inputWidth / stride;
+        outputHeight = inputHeight / stride;
+
+        this.filter = FloatUtil.createGaussianArray(filterSize * filterSize *
+                inputChannels * outputChannels, 0.01f, ConvolutionalNet.random);
+        this.filterDelta = new float[filter.length];
+
         this.result = new float[outputChannels * outputWidth * outputHeight];
         this.tempDelta = new float[result.length];
     }
@@ -90,8 +145,6 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
             }
         }
     }
-
-    float[] tempDelta;
 
     /** 畳み込み層の学習 */
     @Override
@@ -139,14 +192,6 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] +=  filterDelta[i] / count
                 - weightDecay * learningRate * filter[i]);
         IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i] / count);
-    }
-
-    public float[] getFilter() {
-        return filter;
-    }
-
-    public float[] getBias() {
-        return bias;
     }
 
     @Override

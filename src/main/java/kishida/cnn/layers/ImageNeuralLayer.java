@@ -5,7 +5,8 @@
  */
 package kishida.cnn.layers;
 
-import kishida.cnn.activation.ActivationFunction;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.Objects;
 
 /**
  *
@@ -19,10 +20,14 @@ public abstract class ImageNeuralLayer extends NeuralLayer {
     int outputWidth;
     int outputHeight;
 
-    public ImageNeuralLayer(String name, ActivationFunction activation,
+    public ImageNeuralLayer(String name) {
+        this(name, 0, 0, 0, 0, 0, 0);
+    }
+
+    public ImageNeuralLayer(String name,
             int inputChannels, int inputWidth, int inputHeight,
             int outputChannels, int outputWidth, int outputHeight) {
-        super(name, activation);
+        super(name);
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;
         this.inputHeight = inputHeight;
@@ -31,14 +36,30 @@ public abstract class ImageNeuralLayer extends NeuralLayer {
         this.outputHeight = outputHeight;
     }
 
+    public void setPreLayer(NeuralLayer preLayer) {
+        Objects.requireNonNull(preLayer, "need preLayer");
+        if(!(preLayer instanceof ImageNeuralLayer)){
+            throw new IllegalArgumentException("Need ImageNeuralLayer instead of " +
+                    preLayer.getClass());
+        }
+        this.preLayer = preLayer;
+        ImageNeuralLayer imageLayer = (ImageNeuralLayer) preLayer;
+        this.inputChannels = imageLayer.outputChannels;
+        this.inputWidth = imageLayer.outputWidth;
+        this.inputHeight = imageLayer.outputHeight;
+    }
+
+    @JsonIgnore
     public int getOutputChannels() {
         return outputChannels;
     }
 
+    @JsonIgnore
     public int getOutputWidth() {
         return outputWidth;
     }
 
+    @JsonIgnore
     public int getOutputHeight() {
         return outputHeight;
     }

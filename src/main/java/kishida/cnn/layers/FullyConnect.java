@@ -9,7 +9,6 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
-import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.kernels.FullyForwardKernel;
 import kishida.cnn.util.FloatUtil;
@@ -35,15 +34,14 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private int[] dropout;
     @Getter
     private float dropoutRate = 1;
-    private float learningRate;
     @Getter
     private boolean useGpu;
     @Getter
     private ActivationFunction activation;
 
 
-    public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
-        this(name, outputSize, null, null, initBias, null, null, dropoutRate, learningRate, activation, useGpu);
+    public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, boolean useGpu) {
+        this(name, outputSize, null, null, initBias, null, null, dropoutRate,  activation, useGpu);
     }
 
     @JsonCreator
@@ -56,7 +54,6 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
             @JsonProperty("weightDelta") float[] weightDelta,
             @JsonProperty("biasDelta") float[] biasDelta,
             @JsonProperty("dropoutRate") float dropoutRate,
-            @JsonProperty("learningRate") float learningRate,
             @JsonProperty("activation") ActivationFunction activation,
             @JsonProperty("useGpu") boolean useGpu) {
         super(name);
@@ -75,7 +72,6 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         }else{
             this.biasDelta = biasDelta;
         }
-        this.learningRate = learningRate;
         this.dropout = IntStream.generate(() -> 1).limit(outputSize).toArray();
         this.dropoutRate = dropoutRate;
         this.useGpu = useGpu;
@@ -87,7 +83,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.inputSize = preLayer.getOutputSize();
         if(this.weight == null){
             this.weight = FloatUtil.createGaussianArray(
-                    inputSize * outputSize, 0.01f, ConvolutionalNet.random);
+                    inputSize * outputSize, 0.01f, parent.getRandom());
         }
         if(this.weightDelta == null){
             this.weightDelta = new float[inputSize * outputSize];
@@ -95,7 +91,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     }
 
     public void prepareDropout() {
-        dropout = ConvolutionalNet.random.doubles(outputSize)
+        dropout = parent.getRandom().doubles(outputSize)
                 .mapToInt(d -> d < dropoutRate ? 1 : 0).toArray();
     }
 
@@ -134,29 +130,30 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
                 }
                 float d = diffed[j] * delta[j];
                 newDelta[i] += d *  weight[i * outputSize + j];//in[i] *;
-                weightDelta[i * outputSize + j] += d * in[i] * learningRate;
+                weightDelta[i * outputSize + j] += d * in[i] * parent.getLearningRate();
             }
         });
         IntStream.range(0, outputSize).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
-            biasDelta[j] += diffed[j] * delta[j] * learningRate;
+            biasDelta[j] += diffed[j] * delta[j] * parent.getLearningRate();
         });
         return newDelta;
     }
 
     @Override
-    public void prepareBatch(float momentam) {
+    public void prepareBatch() {
+        float momentam = parent.getMomentam();
         IntStream.range(0, weightDelta.length).forEach(i -> weightDelta[i] = weightDelta[i] * momentam);
         IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
     }
 
     @Override
-    public void joinBatch(int count, float weightDecay, float learningRate) {
+    public void joinBatch() {
         IntStream.range(0, weight.length).parallel().forEach(ij -> {
-                weight[ij] += weightDelta[ij] / count
-                        - weight[ij] * weightDecay * learningRate;
+                weight[ij] += weightDelta[ij] / parent.getMiniBatch()
+                        - weight[ij] * parent.getWeightDecay() * parent.getLearningRate();
         });
         IntStream.range(0, bias.length).parallel().forEach(i -> {
-            bias[i] += biasDelta[i] / count;
+            bias[i] += biasDelta[i] / parent.getMiniBatch();
         });
     }
 

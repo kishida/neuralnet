@@ -6,6 +6,7 @@
 package kishida.cnn;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -25,7 +26,10 @@ import kishida.cnn.layers.InputLayer;
 import kishida.cnn.layers.MaxPoolingLayer;
 import kishida.cnn.layers.MultiNormalizeLayer;
 import kishida.cnn.layers.NeuralLayer;
+import kishida.cnn.util.FloatUtil;
+import kishida.cnn.util.RandomWriter;
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  *
@@ -37,7 +41,9 @@ public class NeuralNetwork {
     @Getter
     private float weightDecay;
 
-    private Random random = new Random(1234);
+    @JsonIgnore
+    @Getter @Setter
+    Random random;
     @Getter
     private int miniBatch;
     @Getter
@@ -47,7 +53,7 @@ public class NeuralNetwork {
     private List<NeuralLayer> layers;
 
     public NeuralNetwork() {
-        this(0.01f, 0.0005f, 128, 0.9f, new ArrayList<>());
+        this(0.01f, 0.0005f, 128, 0.9f, null, new ArrayList<>());
     }
 
     @JsonCreator
@@ -56,18 +62,30 @@ public class NeuralNetwork {
             @JsonProperty("weightDecay") float weightDecay,
             @JsonProperty("miniBatch") int miniBatch,
             @JsonProperty("momentam") float momentam,
+            @JsonProperty("random") byte[] randomState,
             @JsonProperty("layers") List<NeuralLayer> layers) {
         this.learningRate = learningRate;
         this.weightDecay = weightDecay;
         this.miniBatch = miniBatch;
         this.momentam = momentam;
         this.layers = layers;
+        if(randomState != null){
+            random = RandomWriter.getRandomFromState(randomState);
+        }else{
+            random = new Random(1234);
+        }
     }
 
     public void init(){
+        layers.forEach(layer -> layer.setParent(this));
         for(int i = 1; i < layers.size(); ++i){
             layers.get(i).setPreLayer(layers.get(i - 1));
         }
+    }
+
+    @JsonProperty("random")
+    public byte[] getRandomState(){
+        return RandomWriter.getRandomState(random);
     }
 
     public void writeAsJson(Writer writer) throws IOException{
@@ -80,15 +98,41 @@ public class NeuralNetwork {
         ObjectMapper mapper = new ObjectMapper();
         return mapper.readValue(reader, NeuralNetwork.class);
     }
+
+
+    public float[] forward(float[] readData, float[] correctData){
+        ((InputLayer)layers.get(0)).setInput(readData);
+        for(int i = 1; i < layers.size(); ++i){
+            layers.get(i).forward();
+        }
+        float[] output = layers.get(layers.size() - 1).getResult();
+        if (!FloatUtil.toDoubleStream(output).allMatch(d -> Double.isFinite(d))) {
+            throw new RuntimeException("there are some infinite value");
+        }
+
+        //誤差を求める
+        float[] delta = new float[output.length];
+        for(int idx = 0; idx < output.length; ++idx){
+            delta[idx] = correctData[idx] - output[idx];
+        }
+        //逆伝播
+        for(int i = layers.size() - 1; i >= 1; --i){
+            delta = layers.get(i).backward(delta);
+        }
+
+        return output;
+    }
+
     public static void main(String[] args) throws IOException {
         NeuralNetwork nn = new NeuralNetwork();
         nn.getLayers().addAll(Arrays.asList(
-                new InputLayer(250, 220),
+                new InputLayer(20, 20),
                 new ConvolutionLayer("conv1", 3, 7, 2, 1, .2f, true),
                 new MaxPoolingLayer("pool", 3, 2),
                 new MultiNormalizeLayer("norm1", 5, .0001f, true),
-                new FullyConnect("test", 3, 0, 1, new LogisticFunction(), .001f, true)));
+                new FullyConnect("test", 3, 0, 1, new LogisticFunction(), true)));
         nn.init();
+        nn.random.nextInt();
         StringWriter sw = new StringWriter();
         nn.writeAsJson(sw);
         System.out.println(sw);
@@ -97,6 +141,7 @@ public class NeuralNetwork {
 "{\n" +
 "  \"weightDecay\" : 5.0E-4,\n" +
 "  \"miniBatch\" : 128,\n" +
+"  \"random\" : \"c3EAfgAAAT/wWGBKFyCXAAATnQ6sF654\",\n" +
 "  \"momentam\" : 0.9,\n" +
 "  \"layers\" : [ {\n" +
 "    \"InputLayer\" : {\n" +
@@ -146,7 +191,8 @@ public class NeuralNetwork {
 "  } ],\n" +
 "  \"learningRate\" : 0.01\n" +
 "}"));
-        System.out.println(v.getMiniBatch());
+        System.out.println(nn.random.nextInt());
+        System.out.println(v.random.nextInt());
     }
 
 

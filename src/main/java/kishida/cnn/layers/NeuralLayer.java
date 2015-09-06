@@ -10,6 +10,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.DoubleSummaryStatistics;
 import java.util.Objects;
+import kishida.cnn.NeuralNetwork;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -38,6 +39,9 @@ public abstract class NeuralLayer {
     @Setter
     NeuralLayer preLayer;
 
+    @Setter
+    NeuralNetwork parent;
+
     public NeuralLayer(String name) {
         this.name = name;
     }
@@ -55,10 +59,10 @@ public abstract class NeuralLayer {
 
     public abstract float[] backward(float[] in, float[] delta);
 
-    public void prepareBatch(float momentam){
+    public void prepareBatch(){
         // do nothing as default
     }
-    public void joinBatch(int count, float weightDecay, float learningRate){
+    public void joinBatch(){
         // do nothing as default
     }
 

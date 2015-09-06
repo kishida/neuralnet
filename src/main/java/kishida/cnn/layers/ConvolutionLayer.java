@@ -11,7 +11,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
-import kishida.cnn.ConvolutionalNet;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.activation.RetifierdLinear;
 import kishida.cnn.kernels.ConvolutionBackwordBiasKernel;
@@ -42,12 +41,11 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     @Getter
     boolean useGpu;
 
-    float learningRate;
     float[] tempDelta;
 
     public ConvolutionLayer(String name,
             int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
-        this(name, size, filterCount, stride, null, null, initBias, null, null, learningRate, useGpu);
+        this(name, size, filterCount, stride, null, null, initBias, null, null, useGpu);
     }
 
     @JsonCreator
@@ -61,7 +59,6 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
             @JsonProperty("initBias") float initBias,
             @JsonProperty("bias") float[] bias,
             @JsonProperty("biasDelta") float[] biasDelta,
-            @JsonProperty("learningRate") float learningRate,
             @JsonProperty("useGpu") boolean useGpu) {
         super(name);
         this.filterSize = filterSize;
@@ -80,7 +77,6 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
             this.biasDelta = biasDelta;
         }
         this.activation = new RetifierdLinear();
-        this.learningRate = learningRate;
         this.useGpu = useGpu;
     }
 
@@ -95,7 +91,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         outputHeight = inputHeight / stride;
 
         this.filter = FloatUtil.createGaussianArray(filterSize * filterSize *
-                inputChannels * outputChannels, 0.01f, ConvolutionalNet.random);
+                inputChannels * outputChannels, 0.01f, parent.getRandom());
         this.filterDelta = new float[filter.length];
 
         this.result = new float[outputChannels * outputWidth * outputHeight];
@@ -150,9 +146,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
             ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result,
                     input, inputChannels, inputWidth, inputHeight,
-                    filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, learningRate, useGpu);
+                    filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, parent.getLearningRate(), useGpu);
             ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result,
-                    outputChannels, outputWidth, outputHeight, biasDelta, learningRate, tempDelta, useGpu);
+                    outputChannels, outputWidth, outputHeight, biasDelta, parent.getLearningRate(), tempDelta, useGpu);
             if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
                     ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
@@ -171,20 +167,22 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     input, inputChannels, inputWidth, inputHeight,
                     filter, outputChannels, outputWidth, outputHeight,
                     filterDelta, biasDelta,
-                    filterSize, stride, bias, learningRate, false);
+                    filterSize, stride, bias, parent.getLearningRate(), false);
         }
     }
 
     @Override
-    public void prepareBatch(float momentam) {
+    public void prepareBatch() {
+        float momentam = parent.getMomentam();
         IntStream.range(0, filterDelta.length).parallel().forEach(i -> filterDelta[i] = filterDelta[i] * momentam);
         IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
     }
 
     @Override
-    public void joinBatch(int count, float weightDecay, float learningRate) {
+    public void joinBatch() {
+        float count = parent.getMiniBatch();
         IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] +=  filterDelta[i] / count
-                - weightDecay * learningRate * filter[i]);
+                - parent.getWeightDecay() * parent.getLearningRate() * filter[i]);
         IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i] / count);
     }
 

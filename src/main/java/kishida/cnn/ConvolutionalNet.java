@@ -16,6 +16,7 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -50,7 +51,7 @@ import kishida.cnn.util.FloatUtil;
 public class ConvolutionalNet {
     private static final float learningRate = 0.01f;
     private static final float weightDecay = 0.0005f;
-    public static Random random = new Random(1234);
+    private static final Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
     private static final int FILTER_1ST = 96;
@@ -64,6 +65,8 @@ public class ConvolutionalNet {
     private static final int IMAGE_SIZE = 227;
     private static final int MINI_BATCH = 128;
     private static final float MOMENTAM = 0.9f;
+    public static final String AVERAGE_PNG = "average.png";
+
     static class Img{
 
         public Img(Path filename, boolean inverse, int x, int y) {
@@ -171,144 +174,147 @@ public class ConvolutionalNet {
         layers.add(new ConvolutionLayer("conv4", 384, 3, 1, 1, learningRate, USE_GPU1));
         layers.add(new ConvolutionLayer("conv5", 256, 3, 1, 1, learningRate, USE_GPU1));
         layers.add(new MaxPoolingLayer("pool5", 3, 2));
-        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RetifierdLinear(), learningRate, false));
+        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RetifierdLinear(), false));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RetifierdLinear(), learningRate, USE_GPU1);
+        FullyConnect fc1 = new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RetifierdLinear(), USE_GPU1);
         layers.add(fc1);
         //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", categories.size(), 1, 1, new SoftMaxFunction(), learningRate, false);
+        FullyConnect fc2 = new FullyConnect("fc2", categories.size(), 1, 1, new SoftMaxFunction(), false);
         layers.add(fc2);
 
-        for(int i = 1; i < layers.size(); ++i){
-            layers.get(i).setPreLayer(layers.get(i - 1));
-        }
+        NeuralNetwork nn = new NeuralNetwork(learningRate, weightDecay, MINI_BATCH, MOMENTAM, null, layers);
+        nn.setRandom(random);
+        nn.init();
         layers.forEach(System.out::println);
 
         int[] count = {0};
         for(int loop = 0; loop < 30; ++loop){
-        Collections.shuffle(files, random);
-        long start = System.currentTimeMillis();
-        long[] pStart = {start};
-        float[] readData = new float[3 * IMAGE_SIZE * IMAGE_SIZE];
-        for(Img img : files) {
-            Path p = img.filename;
-            String catName = p.getParent().getFileName().toString();
-            float[] correctData = new float[categories.size()];
-            for(int i = 0; i < categories.size(); ++i){
-                correctData[i] = categories.get(i).equals(catName) ? 1 : 0;
-            }
-
-            BufferedImage resized = img.readImage();
-            //float[] readData = normalizeImage(imageToArray(resized));
-            imageToArray(resized, readData);
-            for(int i = 0; i < readData.length; ++i){
-                readData[i] -= aveData[i];
-            }
-
-            float[] output = forward(layers, readData, correctData);
-            //元画像の表示
-
-            org.setIcon(new ImageIcon(resized));
-
-            //判定結果
-            float max = Float.NEGATIVE_INFINITY;
-            int maxIndex = -1;
-            for(int i = 0; i < output.length; ++i) {
-                if (output[i] > max){
-                    max = output[i];
-                    maxIndex = i;
-                }
-            }
-            if(maxIndex < 0){
-                org.setText("no data");
-                rateData.add(0);
-            }else if(maxIndex >= categories.size()){
-                org.setText("out of data");
-                rateData.add(0);
-            }else{
-                org.setText(categories.get(maxIndex));
-                rateData.add((int)correctData[maxIndex] );
-            }
-            //正答率
-            while(rateData.size() > 20){
-                rateData.removeFirst();
-            }
-            historyData.add(rateData.stream().mapToDouble(d -> d).sum()
-                    / rateData.size());
-            Image lineGraph = createLineGraph(500, 200,
-                    historyData.stream().mapToDouble(d -> d).toArray(), 1, 0);
-            historyLabel.setIcon(new ImageIcon(lineGraph));
-            //一段目のフィルタの表示
-            ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
-
-            //全結合一段の表示
-            firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
-            //全結合二段の表示
-            lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
-
-            firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.getBias())));
-            secondBias.setIcon(new ImageIcon(createGraph(500, 128, ((ConvolutionLayer)layers.get(4)).getBias())));
-            fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.getBias())));
-            fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.getBias())));
-
-            //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
-
-            count[0]++;
-            if(count[0] >= MINI_BATCH){
-                layers.forEach(layer -> layer.joinBatch(MINI_BATCH, weightDecay, learningRate));
-                for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                    filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
-                            conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
-                }
-                //フィルタ後の表示
-                for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                    filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(
-                            conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
-                }
-                ImageNeuralLayer pool1 = (ImageNeuralLayer) layers.get(2);
-                for(int i = 0; i < pool1.getOutputChannels(); ++i){
-                    pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
-                            pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
-                }
-                ImageNeuralLayer norm1 = (ImageNeuralLayer) layers.get(3);
-                for(int i = 0; i < Math.min(normedLabel.length, norm1.getOutputChannels()); ++i){
-                    normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
-                            norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
+            Collections.shuffle(files, random);
+            long start = System.currentTimeMillis();
+            long[] pStart = {start};
+            float[] readData = new float[3 * IMAGE_SIZE * IMAGE_SIZE];
+            for(Img img : files) {
+                Path p = img.filename;
+                String catName = p.getParent().getFileName().toString();
+                float[] correctData = new float[categories.size()];
+                for(int i = 0; i < categories.size(); ++i){
+                    correctData[i] = categories.get(i).equals(catName) ? 1 : 0;
                 }
 
-                System.out.printf("%4d %.2f %s %s%n",
-                        count[0], MINI_BATCH * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
-                        ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
-                        ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
+                BufferedImage resized = img.readImage();
+                //float[] readData = normalizeImage(imageToArray(resized));
+                imageToArray(resized, readData);
+                for(int i = 0; i < readData.length; ++i){
+                    readData[i] -= aveData[i];
+                }
 
-                for(NeuralLayer layer : layers){
-                    System.out.printf("%s result: %.2f～%.2f average %.2f ", layer.getName(),
-                            layer.getResultStatistics().getMin(),
-                            layer.getResultStatistics().getMax(),
-                            layer.getResultStatistics().getAverage());
-                    if(layer instanceof LerningLayer){
-                        DoubleSummaryStatistics ws = ((LerningLayer)layer).getWeightStatistics();
-                        System.out.printf("weight: %.2f～%.2f average %.2f ",
-                                ws.getMin(), ws.getMax(), ws.getAverage());
-                        DoubleSummaryStatistics bs = ((LerningLayer)layer).getBiasStatistics();
-                        System.out.printf("bias: %.2f～%.2f average %.2f ",
-                                bs.getMin(), bs.getMax(), bs.getAverage());
+                float[] output = nn.forward(readData, correctData);
+                //元画像の表示
+
+                org.setIcon(new ImageIcon(resized));
+
+                //判定結果
+                float max = Float.NEGATIVE_INFINITY;
+                int maxIndex = -1;
+                for(int i = 0; i < output.length; ++i) {
+                    if (output[i] > max){
+                        max = output[i];
+                        maxIndex = i;
                     }
-                    System.out.println();
                 }
+                if(maxIndex < 0){
+                    org.setText("no data");
+                    rateData.add(0);
+                }else if(maxIndex >= categories.size()){
+                    org.setText("out of data");
+                    rateData.add(0);
+                }else{
+                    org.setText(categories.get(maxIndex));
+                    rateData.add((int)correctData[maxIndex] );
+                }
+                //正答率
+                while(rateData.size() > 20){
+                    rateData.removeFirst();
+                }
+                historyData.add(rateData.stream().mapToDouble(d -> d).sum()
+                        / rateData.size());
+                Image lineGraph = createLineGraph(500, 200,
+                        historyData.stream().mapToDouble(d -> d).toArray(), 1, 0);
+                historyLabel.setIcon(new ImageIcon(lineGraph));
+                //一段目のフィルタの表示
+                ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
 
-                count[0] = 0;
-                pStart[0] = System.currentTimeMillis();
-                layers.forEach(layer -> layer.prepareBatch(MOMENTAM));
+                //全結合一段の表示
+                firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
+                //全結合二段の表示
+                lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
+
+                firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.getBias())));
+                secondBias.setIcon(new ImageIcon(createGraph(500, 128, ((ConvolutionLayer)layers.get(4)).getBias())));
+                fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.getBias())));
+                fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.getBias())));
+
+                //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
+
+                count[0]++;
+                if(count[0] >= MINI_BATCH){
+                    layers.forEach(layer -> layer.joinBatch());
+                    for(int i = 0; i < conv1.getOutputChannels(); ++i){
+                        filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
+                                conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
+                    }
+                    //フィルタ後の表示
+                    for(int i = 0; i < conv1.getOutputChannels(); ++i){
+                        filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(
+                                conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
+                    }
+                    ImageNeuralLayer pool1 = (ImageNeuralLayer) layers.get(2);
+                    for(int i = 0; i < pool1.getOutputChannels(); ++i){
+                        pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                                pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
+                    }
+                    ImageNeuralLayer norm1 = (ImageNeuralLayer) layers.get(3);
+                    for(int i = 0; i < Math.min(normedLabel.length, norm1.getOutputChannels()); ++i){
+                        normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                                norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
+                    }
+
+                    System.out.printf("%4d %.2f %s %s%n",
+                            count[0], MINI_BATCH * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
+                            ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
+                            ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
+
+                    for(NeuralLayer layer : layers){
+                        System.out.printf("%s result: %.2f～%.2f average %.2f ", layer.getName(),
+                                layer.getResultStatistics().getMin(),
+                                layer.getResultStatistics().getMax(),
+                                layer.getResultStatistics().getAverage());
+                        if(layer instanceof LerningLayer){
+                            DoubleSummaryStatistics ws = ((LerningLayer)layer).getWeightStatistics();
+                            System.out.printf("weight: %.2f～%.2f average %.2f ",
+                                    ws.getMin(), ws.getMax(), ws.getAverage());
+                            DoubleSummaryStatistics bs = ((LerningLayer)layer).getBiasStatistics();
+                            System.out.printf("bias: %.2f～%.2f average %.2f ",
+                                    bs.getMin(), bs.getMax(), bs.getAverage());
+                        }
+                        System.out.println();
+                    }
+
+                    count[0] = 0;
+                    pStart[0] = System.currentTimeMillis();
+                    layers.forEach(layer -> layer.prepareBatch());
+
+                    try(Writer w = Files.newBufferedWriter(Paths.get("C:\\Users\\naoki\\Desktop\\alexnet.json.txt"))){
+                        nn.writeAsJson(w);
+                    }
+                }
             }
-        }
-        long end = System.currentTimeMillis();
-        System.out.println(end - start);
-        System.out.printf("%.2fm%n", (end - start) / 1000. / 60);
+            long end = System.currentTimeMillis();
+            System.out.println(end - start);
+            System.out.printf("%.2fm%n", (end - start) / 1000. / 60);
         }
     }
-    public static final String AVERAGE_PNG = "average.png";
 
     static Image createGraph(int width, int height, float[] data){
         BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -413,29 +419,6 @@ public class ConvolutionalNet {
         return f;
     }
 
-    static float[] forward(List<NeuralLayer> layers, float[] readData, float[] correctData){
-        ((InputLayer)layers.get(0)).setInput(readData);
-        for(int i = 1; i < layers.size(); ++i){
-            //layers.get(i).preLayer = layers.get(i - 1);
-            layers.get(i).forward();
-        }
-        float[] output = layers.get(layers.size() - 1).getResult();
-        if (!FloatUtil.toDoubleStream(output).allMatch(d -> Double.isFinite(d))) {
-            throw new RuntimeException("there is infinite value");
-        }
-
-        //誤差を求める
-        float[] delta = new float[output.length];
-        for(int idx = 0; idx < output.length; ++idx){
-            delta[idx] = correctData[idx] - output[idx];
-        }
-        //逆伝播
-        for(int i = layers.size() - 1; i >= 1; --i){
-            delta = layers.get(i).backward(delta);
-        }
-
-        return output;
-    }
     static void printDim(String name, float[][][] data){
         System.out.printf("%s:%dx%dx%d%n", name,
                 data[0].length, data[0][0].length, data.length);

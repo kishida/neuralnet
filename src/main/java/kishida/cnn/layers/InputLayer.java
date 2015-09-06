@@ -14,8 +14,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public class InputLayer extends ImageNeuralLayer {
 
+    public InputLayer(int width, int height) {
+        this("input", width, height);
+    }
+
     @JsonCreator
     public InputLayer(
+            @JsonProperty("input") String input,
             @JsonProperty("width") int width,
             @JsonProperty("height") int height) {
         super("input", 0, 0, 0, 3, width, height);

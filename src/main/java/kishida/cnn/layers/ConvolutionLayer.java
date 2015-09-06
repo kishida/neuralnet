@@ -7,6 +7,7 @@ package kishida.cnn.layers;
 
 import com.amd.aparapi.Kernel;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
@@ -25,12 +26,16 @@ import lombok.Getter;
 /** 畳み込み層 */
 public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     float[] filter;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     float[] bias;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     float[] filterDelta;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     float[] biasDelta;
     @Getter
@@ -41,6 +46,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     @Getter
     boolean useGpu;
 
+    float initBias;
     float[] tempDelta;
 
     public ConvolutionLayer(String name,
@@ -66,16 +72,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         this.stride = stride;
         this.filter = filter;
         this.filterDelta = filterDelta;
-        if(bias == null){
-            this.bias = FloatUtil.createArray(outputChannels, initBias);
-        }else{
-            this.bias = bias;
-        }
-        if(biasDelta == null){
-            this.biasDelta = new float[this.bias.length];
-        }else{
-            this.biasDelta = biasDelta;
-        }
+        this.initBias = initBias;
+        this.bias = bias;
+        this.biasDelta = biasDelta;
         this.activation = new RectifiedLinear();
         this.useGpu = useGpu;
     }
@@ -93,6 +92,14 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         this.filter = FloatUtil.createGaussianArray(filterSize * filterSize *
                 inputChannels * outputChannels, 0.01f, parent.getRandom());
         this.filterDelta = new float[filter.length];
+
+        // コンストラクタで処理できるけど、JSONデータ出力で省略できるように。
+        if(bias == null){
+            this.bias = FloatUtil.createArray(outputChannels, initBias);
+        }
+        if(biasDelta == null){
+            this.biasDelta = new float[this.bias.length];
+        }
 
         this.result = new float[outputChannels * outputWidth * outputHeight];
         this.tempDelta = new float[result.length];

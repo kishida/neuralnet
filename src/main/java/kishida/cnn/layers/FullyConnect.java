@@ -6,6 +6,7 @@
 package kishida.cnn.layers;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
@@ -19,12 +20,16 @@ import lombok.Getter;
  * @author naoki
  */
 public class FullyConnect extends NeuralLayer implements LerningLayer{
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     private float[]weight;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     private float[] bias;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     private float[]weightDelta;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
     private float[] biasDelta;
 
@@ -39,6 +44,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     @Getter
     private ActivationFunction activation;
 
+    private float initBias;
 
     public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, boolean useGpu) {
         this(name, outputSize, null, null, initBias, null, null, dropoutRate,  activation, useGpu);
@@ -62,16 +68,9 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.outputSize = outputSize;
         this.weight = weight;
         this.weightDelta = weightDelta;
-        if(bias == null){
-            this.bias = FloatUtil.createArray(outputSize, initBias);
-        }else{
-            this.bias = bias;
-        }
-        if(biasDelta == null){
-            this.biasDelta = new float[outputSize];
-        }else{
-            this.biasDelta = biasDelta;
-        }
+        this.bias = bias;
+        this.initBias = initBias;
+        this.biasDelta = biasDelta;
         this.dropout = IntStream.generate(() -> 1).limit(outputSize).toArray();
         this.dropoutRate = dropoutRate;
         this.useGpu = useGpu;
@@ -87,6 +86,14 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         }
         if(this.weightDelta == null){
             this.weightDelta = new float[inputSize * outputSize];
+        }
+
+        // 実際はコンストラクタで処理できるけど、JSONにデータ出力したくないときのために。
+        if(bias == null){
+            this.bias = FloatUtil.createArray(outputSize, initBias);
+        }
+        if(biasDelta == null){
+            this.biasDelta = new float[outputSize];
         }
     }
 

@@ -155,7 +155,7 @@ public class NeuralNetwork {
                 new MaxPoolingLayer("pool", 3, 2),
                 new MultiNormalizeLayer("norm1", 5, .0001f, true),
                 new FullyConnect("test", 3, 0, 1, new LogisticFunction(), true)));
-        nn.init();
+        //nn.init();
         nn.random.nextInt();
         StringWriter sw = new StringWriter();
         nn.writeAsJson(sw);

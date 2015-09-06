@@ -18,6 +18,7 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import kishida.cnn.activation.LogisticFunction;
 import kishida.cnn.layers.ConvolutionLayer;
@@ -48,6 +49,7 @@ public class NeuralNetwork {
     @JsonIgnore
     @Getter @Setter
     Random imageRandom;
+    private byte[] imageRandomState;
 
     @Getter
     private int miniBatch;
@@ -57,6 +59,13 @@ public class NeuralNetwork {
     @Getter
     private List<NeuralLayer> layers;
 
+    @Getter @Setter
+    private int loop;
+
+    @Getter @Setter
+    private int imageIndex;
+
+
     public NeuralNetwork() {
         this(0.01f, 0.0005f, 128, 0.9f, 1234, 2345, new ArrayList<>());
     }
@@ -64,7 +73,7 @@ public class NeuralNetwork {
     public NeuralNetwork(float learningRate, float weightDecay, int miniBatch, float momentam,
             long randomSeed, long imageRandomSeed, List<NeuralLayer> layers){
         this(learningRate, weightDecay, miniBatch, momentam,
-                null, randomSeed, null, imageRandomSeed, layers);
+                null, randomSeed, null, imageRandomSeed, 0, 0, layers);
     }
 
     @JsonCreator
@@ -77,12 +86,16 @@ public class NeuralNetwork {
             @JsonProperty("randomSeed") long randomSeed,
             @JsonProperty("imageRandom") byte[] imageRandomState,
             @JsonProperty("imageRandomSeed") long imageRandomSeed,
+            @JsonProperty("loop") int loop,
+            @JsonProperty("imageIndex") int imageIndex,
             @JsonProperty("layers") List<NeuralLayer> layers) {
         this.learningRate = learningRate;
         this.weightDecay = weightDecay;
         this.miniBatch = miniBatch;
         this.momentam = momentam;
         this.layers = layers;
+        this.imageIndex = imageIndex;
+        this.loop = loop;
         if(randomState != null){
             random = RandomWriter.getRandomFromState(randomState);
         }else{
@@ -103,13 +116,19 @@ public class NeuralNetwork {
     }
 
     @JsonProperty("random")
-    public byte[] getRandomState(){
+    byte[] getRandomState(){
         return RandomWriter.getRandomState(random);
     }
 
     @JsonProperty("imageRandom")
-    public byte[] getImageRandomState(){
-        return RandomWriter.getRandomState(imageRandom);
+    byte[] getImageRandomState(){
+        if(imageRandomState == null){
+            saveImageRandomState();
+        }
+        return imageRandomState;
+    }
+    public void saveImageRandomState(){
+        imageRandomState = RandomWriter.getRandomState(imageRandom);
     }
 
     public void writeAsJson(Writer writer) throws IOException{
@@ -123,6 +142,11 @@ public class NeuralNetwork {
         return mapper.readValue(reader, NeuralNetwork.class);
     }
 
+    public Optional<NeuralLayer> findLayerByName(String name){
+        return layers.stream()
+                .filter(layer -> name.equals(layer.getName()))
+                .findFirst();
+    }
 
     public float[] forward(float[] readData, float[] correctData){
         ((InputLayer)layers.get(0)).setInput(readData);
@@ -145,6 +169,13 @@ public class NeuralNetwork {
         }
 
         return output;
+    }
+
+    public void joinBatch(){
+        layers.forEach(NeuralLayer::joinBatch);
+    }
+    public void prepareBatch() {
+        layers.forEach(NeuralLayer::prepareBatch);
     }
 
     public static void main(String[] args) throws IOException {
@@ -216,7 +247,10 @@ public class NeuralNetwork {
 "}"));
         System.out.println(nn.random.nextInt());
         System.out.println(v.random.nextInt());
+        v.findLayerByName("test").ifPresent(layer -> {
+            FullyConnect f = (FullyConnect) layer;
+            System.out.println(f.getActivation().getClass());
+        });
     }
-
 
 }

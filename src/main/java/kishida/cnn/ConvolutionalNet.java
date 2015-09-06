@@ -1,12 +1,9 @@
 package kishida.cnn;
 
 import kishida.cnn.layers.ImageNeuralLayer;
-import kishida.cnn.layers.MaxPoolingLayer;
 import kishida.cnn.layers.ConvolutionLayer;
 import kishida.cnn.layers.FullyConnect;
-import kishida.cnn.layers.InputLayer;
 import kishida.cnn.layers.NeuralLayer;
-import kishida.cnn.activation.SoftMaxFunction;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -15,11 +12,14 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,11 +36,9 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
-import kishida.cnn.activation.RectifiedLinear;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.layers.LerningLayer;
-import kishida.cnn.layers.MultiNormalizeLayer;
 import kishida.cnn.util.FloatUtil;
 
 /**
@@ -64,6 +62,8 @@ public class ConvolutionalNet {
     private static final int MINI_BATCH = 128;
     private static final float MOMENTAM = 0.9f;
     public static final String AVERAGE_PNG = "average.png";
+    private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\alexnet.json.txt";
+    private static final String RESOURCE_NAME = "/alexnet_def.json";
 
     static class Img{
 
@@ -149,50 +149,100 @@ public class ConvolutionalNet {
         org.setIcon(new ImageIcon(aveImage));
         float[] aveData = imageToArray(aveImage);
 
+        /*
         List<NeuralLayer> layers = new ArrayList<>();
-        InputLayer input = new InputLayer(227, 227);
-        layers.add(input);
+        layers.addAll(Arrays.asList(
+            new InputLayer("input", 227, 227),
+            //一段目
+            new ConvolutionLayer("conv1", FILTER_1ST, FILTER_1ST_SIZE, 4, 0, USE_GPU1),
+            //一段目のプーリング
+            new MaxPoolingLayer("pool1", 3, 2),
+            //一段目の正規化
+            //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
+            new MultiNormalizeLayer("norm1", 5, .000001f, USE_GPU1),
+            //二段目
+            new ConvolutionLayer("conv2", FILTER_2ND, 5, 1, 1, USE_GPU2),
+            //二段目のプーリング
+            new MaxPoolingLayer("pool2", 3, 2),
+            //二段目の正規化
+            new MultiNormalizeLayer("norm2", 5, .000001f, USE_GPU2),
 
-        //一段目
-        layers.add(new ConvolutionLayer("conv1", FILTER_1ST, FILTER_1ST_SIZE, 4, 0, USE_GPU1));
-        //一段目のプーリング
-        layers.add(new MaxPoolingLayer("pool1", 3, 2));
-        //一段目の正規化
-        //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
-        layers.add(new MultiNormalizeLayer("norm1", 5, .000001f, USE_GPU1));
-        //二段目
-        layers.add(new ConvolutionLayer("conv2", FILTER_2ND, 5, 1, 1, USE_GPU2));
-        //二段目のプーリング
-        layers.add(new MaxPoolingLayer("pool2", 3, 2));
+            new ConvolutionLayer("conv3", 384, 3, 1, 0, USE_GPU1),
+            new ConvolutionLayer("conv4", 384, 3, 1, 1, USE_GPU1),
+            new ConvolutionLayer("conv5", 256, 3, 1, 1, USE_GPU1),
+            new MaxPoolingLayer("pool5", 3, 2),
+            new FullyConnect("fc0", 4096, 1, .5f, new RectifiedLinear(), USE_GPU1),
 
-        //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
-        layers.add(new MultiNormalizeLayer("norm2", 5, .000001f, USE_GPU2));
-
-        layers.add(new ConvolutionLayer("conv3", 384, 3, 1, 0, USE_GPU1));
-        layers.add(new ConvolutionLayer("conv4", 384, 3, 1, 1, USE_GPU1));
-        layers.add(new ConvolutionLayer("conv5", 256, 3, 1, 1, USE_GPU1));
-        layers.add(new MaxPoolingLayer("pool5", 3, 2));
-        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RectifiedLinear(), USE_GPU1));
-
-        //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RectifiedLinear(), USE_GPU1);
-        layers.add(fc1);
-        //全結合2
-        FullyConnect fc2 = new FullyConnect("fc2", categories.size(), 1, 1, new SoftMaxFunction(), false);
-        layers.add(fc2);
+            //全結合1
+            new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RectifiedLinear(), USE_GPU1),
+            //全結合2
+            new FullyConnect("fc2", categories.size(), 1, 1, new SoftMaxFunction(), false)
+        ));
 
         NeuralNetwork nn = new NeuralNetwork(learningRate, weightDecay, MINI_BATCH, MOMENTAM,
                 1234, 2345, layers);
-        nn.init();
-        layers.forEach(System.out::println);
+        */
+        /*
+        try(Writer w = Files.newBufferedWriter(Paths.get("C:\\Users\\naoki\\Desktop\\tinynet_def.json.txt"))){
+            nn.writeAsJson(w);
+        }*/
 
+        NeuralNetwork nn;
+
+
+        try(InputStream is = ConvolutionalNet.class.getResourceAsStream(RESOURCE_NAME);
+                InputStreamReader isr = new InputStreamReader(is)){
+            nn = NeuralNetwork.readFromJson(isr);
+        }
+
+        /*
+        try(Reader r = Files.newBufferedReader(Paths.get(FILENAME))){
+            nn = NeuralNetwork.readFromJson(r);
+        }*/
+
+        nn.init();
+        nn.getLayers().forEach(System.out::println);
+        FullyConnect fc1 = (FullyConnect)nn.findLayerByName("fc1")
+                .orElseThrow(() -> new IllegalArgumentException("fc1 not found"));
+        FullyConnect fc2 = (FullyConnect)nn.findLayerByName("fc2")
+                .orElseThrow(() -> new IllegalArgumentException("fc2 not found"));
+        ConvolutionLayer conv1 = (ConvolutionLayer)nn.findLayerByName("conv1")
+            .orElseThrow(() -> new IllegalArgumentException("conv1 not found"));
+        ConvolutionLayer conv2 = (ConvolutionLayer)nn.findLayerByName("conv2")
+                .orElseThrow(() -> new IllegalArgumentException("conv2 not found"));
+        ImageNeuralLayer pool1 = (ImageNeuralLayer)nn.findLayerByName("pool1")
+                .orElseThrow(() -> new IllegalArgumentException("pool1 not found"));
+        ImageNeuralLayer norm1 = (ImageNeuralLayer)nn.findLayerByName("norm1")
+                .orElseThrow(() -> new IllegalArgumentException("norm1 not found"));
+        int[] lastHour = {LocalTime.now().getHour()};
         int[] count = {0};
-        for(int loop = 0; loop < 30; ++loop){
-            Collections.shuffle(files, nn.imageRandom);
+        for(; nn.getLoop() < 30; nn.setLoop(nn.getLoop() + 1)){
+            nn.saveImageRandomState();
+            Collections.shuffle(files, nn.getImageRandom());
             long start = System.currentTimeMillis();
             long[] pStart = {start};
             float[] readData = new float[3 * IMAGE_SIZE * IMAGE_SIZE];
-            for(Img img : files) {
+            files.stream().skip(nn.getImageIndex()).forEach(img -> {
+                if(count[0] == 0){
+                    for(int i = 0; i < conv1.getOutputChannels(); ++i){
+                        filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
+                                conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
+                    }
+                    //フィルタ後の表示
+                    for(int i = 0; i < conv1.getOutputChannels(); ++i){
+                        filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(
+                                conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
+                    }
+                    for(int i = 0; i < pool1.getOutputChannels(); ++i){
+                        pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                                pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
+                    }
+                    for(int i = 0; i < Math.min(normedLabel.length, norm1.getOutputChannels()); ++i){
+                        normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
+                                norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
+                    }
+                }
+
                 Path p = img.filename;
                 String catName = p.getParent().getFileName().toString();
                 float[] correctData = new float[categories.size()];
@@ -241,49 +291,30 @@ public class ConvolutionalNet {
                         historyData.stream().mapToDouble(d -> d).toArray(), 1, 0);
                 historyLabel.setIcon(new ImageIcon(lineGraph));
                 //一段目のフィルタの表示
-                ConvolutionLayer conv1 = (ConvolutionLayer) layers.get(1);
-
                 //全結合一段の表示
                 firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
                 //全結合二段の表示
                 lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
 
                 firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.getBias())));
-                secondBias.setIcon(new ImageIcon(createGraph(500, 128, ((ConvolutionLayer)layers.get(4)).getBias())));
+                secondBias.setIcon(new ImageIcon(createGraph(500, 128,
+                        conv2.getBias())));
                 fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.getBias())));
                 fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.getBias())));
 
                 //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
 
                 count[0]++;
+                nn.setImageIndex(nn.getImageIndex() + 1);
                 if(count[0] >= MINI_BATCH){
-                    layers.forEach(layer -> layer.joinBatch());
-                    for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                        filtersLabel[i].setIcon(new ImageIcon(resize(arrayToImage(
-                                conv1.getFilter(), i, FILTER_1ST_SIZE, FILTER_1ST_SIZE), 44, 44, false, false)));
-                    }
-                    //フィルタ後の表示
-                    for(int i = 0; i < conv1.getOutputChannels(); ++i){
-                        filteredLabel[i].setIcon(new ImageIcon(arrayToImageMono(
-                                conv1.getResult(), i, conv1.getOutputWidth(), conv1.getOutputHeight())));
-                    }
-                    ImageNeuralLayer pool1 = (ImageNeuralLayer) layers.get(2);
-                    for(int i = 0; i < pool1.getOutputChannels(); ++i){
-                        pooledLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
-                                pool1.getResult(), i, pool1.getOutputWidth(), pool1.getOutputHeight()), 48, 48)));
-                    }
-                    ImageNeuralLayer norm1 = (ImageNeuralLayer) layers.get(3);
-                    for(int i = 0; i < Math.min(normedLabel.length, norm1.getOutputChannels()); ++i){
-                        normedLabel[i].setIcon(new ImageIcon(resize(arrayToImageMono(
-                                norm1.getResult(), i, norm1.getOutputWidth(), norm1.getOutputHeight()), 48, 48)));
-                    }
+                    nn.joinBatch();
 
                     System.out.printf("%4d %.2f %s %s%n",
                             count[0], MINI_BATCH * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                             ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                             ConvolutionBackwordKernel.INSTANCE.getExecutionMode());
 
-                    for(NeuralLayer layer : layers){
+                    for(NeuralLayer layer : nn.getLayers()){
                         System.out.printf("%s result: %.2f～%.2f average %.2f ", layer.getName(),
                                 layer.getResultStatistics().getMin(),
                                 layer.getResultStatistics().getMax(),
@@ -301,16 +332,24 @@ public class ConvolutionalNet {
 
                     count[0] = 0;
                     pStart[0] = System.currentTimeMillis();
-                    layers.forEach(layer -> layer.prepareBatch());
+                    nn.prepareBatch();
 
-                    try(Writer w = Files.newBufferedWriter(Paths.get("C:\\Users\\naoki\\Desktop\\alexnet.json.txt"))){
-                        nn.writeAsJson(w);
+                    // 1時間に一回保存する
+                    int hour = LocalTime.now().getHour();
+                    if(lastHour[0] != hour){
+                        lastHour[0] = hour;
+                        try(Writer w = Files.newBufferedWriter(Paths.get(FILENAME))){
+                            nn.writeAsJson(w);
+                        }catch(IOException ex){
+                            throw new UncheckedIOException(ex);
+                        }
                     }
                 }
-            }
+            });
             long end = System.currentTimeMillis();
             System.out.println(end - start);
             System.out.printf("%.2fm%n", (end - start) / 1000. / 60);
+            nn.setImageIndex(0);
         }
     }
 

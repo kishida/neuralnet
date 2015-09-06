@@ -8,6 +8,7 @@ package kishida.cnn.layers;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
@@ -81,6 +82,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.bias = bias;
         this.initBias = initBias;
         this.biasDelta = biasDelta;
+        this.result = new float[outputSize];
         this.dropout = IntStream.generate(() -> 1).limit(outputSize).toArray();
         this.dropoutRate = dropoutRate;
         this.useGpu = useGpu;
@@ -125,8 +127,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     @Override
     public float[] forward(float[] in) {
         prepareDropout();
-        result = new float[outputSize];
-
+        Arrays.fill(result, 0);
         FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
         /*
         IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {

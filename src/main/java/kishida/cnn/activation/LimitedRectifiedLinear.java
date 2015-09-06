@@ -6,10 +6,10 @@
 package kishida.cnn.activation;
 
 /** 正規化線形関数 */
-public class LimitedRetifierdLinear extends ActivationFunction {
+public class LimitedRectifiedLinear extends ActivationFunction {
     float limit;
 
-    public LimitedRetifierdLinear(float limit) {
+    public LimitedRectifiedLinear(float limit) {
         this.limit = limit;
     }
 

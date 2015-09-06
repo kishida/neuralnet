@@ -48,7 +48,7 @@ public class FullyForwardKernel extends Kernel{
         this.weight = weight;
         this.bias = bias;
         if(useGpu){
-            execute(inSize * out);
+            execute(out);
         }else{
             IntStream.range(0, out).parallel().forEach(j -> {
                 proc(j);

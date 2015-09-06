@@ -1014,14 +1014,21 @@ public class ConvolutionalNet {
         public double[] forward(double[] in){
             prepareDropout();
             result = new double[out];
-            IntStream.range(0, out).parallel()
-                    .filter(j -> dropout[j] == 1).forEach(j -> {
+            IntStream stream = IntStream.range(0, out);
+            if(out > 8){
+                stream = stream.parallel();
+            }
+            if(dropoutRate < 1){
+                stream = stream.filter(j -> dropout[j] == 1);
+            }
+            stream.forEach(j -> {
                 for(int i = 0; i < in.length; ++i){
                     result[j] += in[i] * weight[i][j];
                 }
                 result[j] += bias[j];
             });
             result = activation.applyAfter(result);
+
             if(!Arrays.stream(result).allMatch(Double::isFinite)){
                 System.out.println("there is infinite value");
                 System.out.println(Arrays.toString(result));

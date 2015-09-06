@@ -156,25 +156,25 @@ public class ConvolutionalNet {
         layers.add(input);
 
         //一段目
-        layers.add(new ConvolutionLayer("conv1", FILTER_1ST, FILTER_1ST_SIZE, 4, 0, learningRate, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv1", FILTER_1ST, FILTER_1ST_SIZE, 4, 0, USE_GPU1));
         //一段目のプーリング
         layers.add(new MaxPoolingLayer("pool1", 3, 2));
         //一段目の正規化
         //layers.add(pre = new NormalizeLayer("norm1", 5, .01, pre, USE_GPU1));
         layers.add(new MultiNormalizeLayer("norm1", 5, .000001f, USE_GPU1));
         //二段目
-        layers.add(new ConvolutionLayer("conv2", FILTER_2ND, 5, 1, 1, learningRate, USE_GPU2));
+        layers.add(new ConvolutionLayer("conv2", FILTER_2ND, 5, 1, 1, USE_GPU2));
         //二段目のプーリング
         layers.add(new MaxPoolingLayer("pool2", 3, 2));
 
         //layers.add(pre = new NormalizeLayer("norm2", 5, .01, pre, USE_GPU2));
         layers.add(new MultiNormalizeLayer("norm2", 5, .000001f, USE_GPU2));
 
-        layers.add(new ConvolutionLayer("conv3", 384, 3, 1, 0, learningRate, USE_GPU1));
-        layers.add(new ConvolutionLayer("conv4", 384, 3, 1, 1, learningRate, USE_GPU1));
-        layers.add(new ConvolutionLayer("conv5", 256, 3, 1, 1, learningRate, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv3", 384, 3, 1, 0, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv4", 384, 3, 1, 1, USE_GPU1));
+        layers.add(new ConvolutionLayer("conv5", 256, 3, 1, 1, USE_GPU1));
         layers.add(new MaxPoolingLayer("pool5", 3, 2));
-        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RetifierdLinear(), false));
+        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RetifierdLinear(), USE_GPU1));
 
         //全結合1
         FullyConnect fc1 = new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RetifierdLinear(), USE_GPU1);
@@ -183,14 +183,14 @@ public class ConvolutionalNet {
         FullyConnect fc2 = new FullyConnect("fc2", categories.size(), 1, 1, new SoftMaxFunction(), false);
         layers.add(fc2);
 
-        NeuralNetwork nn = new NeuralNetwork(learningRate, weightDecay, MINI_BATCH, MOMENTAM, null, layers);
-        nn.setRandom(random);
+        NeuralNetwork nn = new NeuralNetwork(learningRate, weightDecay, MINI_BATCH, MOMENTAM,
+                1234, 2345, layers);
         nn.init();
         layers.forEach(System.out::println);
 
         int[] count = {0};
         for(int loop = 0; loop < 30; ++loop){
-            Collections.shuffle(files, random);
+            Collections.shuffle(files, nn.imageRandom);
             long start = System.currentTimeMillis();
             long[] pStart = {start};
             float[] readData = new float[3 * IMAGE_SIZE * IMAGE_SIZE];

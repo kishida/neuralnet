@@ -44,6 +44,11 @@ public class NeuralNetwork {
     @JsonIgnore
     @Getter @Setter
     Random random;
+
+    @JsonIgnore
+    @Getter @Setter
+    Random imageRandom;
+
     @Getter
     private int miniBatch;
     @Getter
@@ -53,7 +58,13 @@ public class NeuralNetwork {
     private List<NeuralLayer> layers;
 
     public NeuralNetwork() {
-        this(0.01f, 0.0005f, 128, 0.9f, null, new ArrayList<>());
+        this(0.01f, 0.0005f, 128, 0.9f, 1234, 2345, new ArrayList<>());
+    }
+
+    public NeuralNetwork(float learningRate, float weightDecay, int miniBatch, float momentam,
+            long randomSeed, long imageRandomSeed, List<NeuralLayer> layers){
+        this(learningRate, weightDecay, miniBatch, momentam,
+                null, randomSeed, null, imageRandomSeed, layers);
     }
 
     @JsonCreator
@@ -63,6 +74,9 @@ public class NeuralNetwork {
             @JsonProperty("miniBatch") int miniBatch,
             @JsonProperty("momentam") float momentam,
             @JsonProperty("random") byte[] randomState,
+            @JsonProperty("randomSeed") long randomSeed,
+            @JsonProperty("imageRandom") byte[] imageRandomState,
+            @JsonProperty("imageRandomSeed") long imageRandomSeed,
             @JsonProperty("layers") List<NeuralLayer> layers) {
         this.learningRate = learningRate;
         this.weightDecay = weightDecay;
@@ -72,7 +86,12 @@ public class NeuralNetwork {
         if(randomState != null){
             random = RandomWriter.getRandomFromState(randomState);
         }else{
-            random = new Random(1234);
+            random = new Random(randomSeed);
+        }
+        if(imageRandomState != null){
+            imageRandom = RandomWriter.getRandomFromState(imageRandomState);
+        }else{
+            imageRandom = new Random(imageRandomSeed);
         }
     }
 
@@ -86,6 +105,11 @@ public class NeuralNetwork {
     @JsonProperty("random")
     public byte[] getRandomState(){
         return RandomWriter.getRandomState(random);
+    }
+
+    @JsonProperty("imageRandom")
+    public byte[] getImageRandomState(){
+        return RandomWriter.getRandomState(imageRandom);
     }
 
     public void writeAsJson(Writer writer) throws IOException{
@@ -127,7 +151,7 @@ public class NeuralNetwork {
         NeuralNetwork nn = new NeuralNetwork();
         nn.getLayers().addAll(Arrays.asList(
                 new InputLayer(20, 20),
-                new ConvolutionLayer("conv1", 3, 7, 2, 1, .2f, true),
+                new ConvolutionLayer("conv1", 3, 7, 2, 1, true),
                 new MaxPoolingLayer("pool", 3, 2),
                 new MultiNormalizeLayer("norm1", 5, .0001f, true),
                 new FullyConnect("test", 3, 0, 1, new LogisticFunction(), true)));
@@ -142,6 +166,7 @@ public class NeuralNetwork {
 "  \"weightDecay\" : 5.0E-4,\n" +
 "  \"miniBatch\" : 128,\n" +
 "  \"random\" : \"c3EAfgAAAT/wWGBKFyCXAAATnQ6sF654\",\n" +
+"  \"imageRandom\" : \"c3EAfgAAAAAAAAAAAAAAAAAABd7s70R4\",\n" +
 "  \"momentam\" : 0.9,\n" +
 "  \"layers\" : [ {\n" +
 "    \"InputLayer\" : {\n" +

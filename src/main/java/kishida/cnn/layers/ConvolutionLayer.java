@@ -44,7 +44,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     float[] tempDelta;
 
     public ConvolutionLayer(String name,
-            int filterCount, int size, int stride, float initBias, float learningRate, boolean useGpu) {
+            int filterCount, int size, int stride, float initBias, boolean useGpu) {
         this(name, size, filterCount, stride, null, null, initBias, null, null, useGpu);
     }
 

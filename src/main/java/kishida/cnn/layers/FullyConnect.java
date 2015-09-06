@@ -43,7 +43,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private boolean useGpu;
     @Getter
     private ActivationFunction activation;
-
+    @Getter
     private float initBias;
 
     public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, boolean useGpu) {

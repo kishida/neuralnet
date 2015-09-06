@@ -45,7 +45,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     private ActivationFunction activation;
     @Getter
     boolean useGpu;
-
+    @Getter
     float initBias;
     float[] tempDelta;
 

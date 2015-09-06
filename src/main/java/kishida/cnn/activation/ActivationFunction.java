@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
 @JsonSubTypes({
         @JsonSubTypes.Type(LogisticFunction.class),
-        @JsonSubTypes.Type(RetifierdLinear.class),
+        @JsonSubTypes.Type(RectifiedLinear.class),
         @JsonSubTypes.Type(SoftMaxFunction.class),
 })
 public abstract class ActivationFunction {

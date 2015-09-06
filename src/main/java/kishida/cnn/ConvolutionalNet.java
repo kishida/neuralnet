@@ -26,7 +26,6 @@ import java.util.Collections;
 import java.util.DoubleSummaryStatistics;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
 import java.util.function.DoubleToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -37,7 +36,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
-import kishida.cnn.activation.RetifierdLinear;
+import kishida.cnn.activation.RectifiedLinear;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.layers.LerningLayer;
@@ -51,7 +50,6 @@ import kishida.cnn.util.FloatUtil;
 public class ConvolutionalNet {
     private static final float learningRate = 0.01f;
     private static final float weightDecay = 0.0005f;
-    private static final Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;
     private static final int FILTER_1ST = 96;
@@ -174,10 +172,10 @@ public class ConvolutionalNet {
         layers.add(new ConvolutionLayer("conv4", 384, 3, 1, 1, USE_GPU1));
         layers.add(new ConvolutionLayer("conv5", 256, 3, 1, 1, USE_GPU1));
         layers.add(new MaxPoolingLayer("pool5", 3, 2));
-        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RetifierdLinear(), USE_GPU1));
+        layers.add(new FullyConnect("fc0", 4096, 1, .5f, new RectifiedLinear(), USE_GPU1));
 
         //全結合1
-        FullyConnect fc1 = new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RetifierdLinear(), USE_GPU1);
+        FullyConnect fc1 = new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RectifiedLinear(), USE_GPU1);
         layers.add(fc1);
         //全結合2
         FullyConnect fc2 = new FullyConnect("fc2", categories.size(), 1, 1, new SoftMaxFunction(), false);

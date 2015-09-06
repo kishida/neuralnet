@@ -6,7 +6,7 @@
 package kishida.cnn.activation;
 
 /** 正規化線形関数 */
-public class RetifierdLinear extends ActivationFunction {
+public class RectifiedLinear extends ActivationFunction {
 
     @Override
     public float apply(float value) {

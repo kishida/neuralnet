@@ -12,7 +12,7 @@ import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
-import kishida.cnn.activation.RetifierdLinear;
+import kishida.cnn.activation.RectifiedLinear;
 import kishida.cnn.kernels.ConvolutionBackwordBiasKernel;
 import kishida.cnn.kernels.ConvolutionBackwordDeltaKernel;
 import kishida.cnn.kernels.ConvolutionBackwordFilterKernel;
@@ -76,7 +76,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         }else{
             this.biasDelta = biasDelta;
         }
-        this.activation = new RetifierdLinear();
+        this.activation = new RectifiedLinear();
         this.useGpu = useGpu;
     }
 

@@ -27,6 +27,7 @@ import java.util.DoubleSummaryStatistics;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.function.DoubleToIntFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -112,13 +113,13 @@ public class ConvolutionalNet {
                 .filter(p -> !Files.isDirectory(p))
                 .filter(p -> !AVERAGE_PNG.equals(p.getFileName().toString()))
                 .filter(p -> !p.getParent().getFileName().toString().startsWith("_"))
-                /*
+
                 .flatMap(p -> IntStream.range(0, 3).mapToObj(i ->
                         IntStream.range(0, 3).mapToObj(j ->
                                 Stream.of(new Img(p, true, i, j), new Img(p, false, i, j)))
                                 .flatMap(Function.identity())).flatMap(Function.identity()))
-                */
-                .map(p -> new Img(p, true, 0, 0))
+
+                //.map(p -> new Img(p, true, 0, 0))
                 .collect(Collectors.toList());
 
 

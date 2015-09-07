@@ -86,6 +86,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.dropout = IntStream.generate(() -> 1).limit(outputSize).toArray();
         this.dropoutRate = dropoutRate;
         this.useGpu = useGpu;
+        this.newDelta = new float[in];
+        this.diffed = new float[out];
     }
 
     @Override
@@ -142,12 +144,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public float[] backward(float[] in, float[] delta) {
-        /*
-        float[][] oldweight = Arrays.stream(weight).parallel()
-        .map(row -> Arrays.copyOf(row, row.length))
-        .toArray(float[][]::new);*/
-        float[] newDelta = new float[in.length];
-        float[] diffed = new float[result.length];
+        Arrays.fill(newDelta, 0);
+		Arrays.fill(diffed, 0);
         for(int i = 0; i < result.length; ++i){
                 diffed[i] = activation.diff(result[i]);
         }

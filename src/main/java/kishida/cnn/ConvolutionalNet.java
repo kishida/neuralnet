@@ -380,7 +380,7 @@ public class ConvolutionalNet {
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, height);
         g.setColor(Color.BLACK);
-		int step = data.length / width + 1;
+        int step = data.length / width + 1;
         for(int i = step; i < data.length; i += step){
             g.drawLine((i - step) * width / data.length, (int)((data[i - 1] - max) * (height - 10) / (min - max) - 5)
                     , i * width / data.length, (int)((data[i] - max) * (height - 10)/ (min - max)) - 5);

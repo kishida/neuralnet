@@ -42,6 +42,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private float dropoutRate = 1;
     @Getter
     private boolean useGpu;
+    private float[] newDelta;
+    private float[] diffed;
 
     private ActivationFunction activation;
     @Getter
@@ -86,8 +88,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.dropout = IntStream.generate(() -> 1).limit(outputSize).toArray();
         this.dropoutRate = dropoutRate;
         this.useGpu = useGpu;
-        this.newDelta = new float[in];
-        this.diffed = new float[out];
+        this.diffed = new float[outputSize];
     }
 
     @Override
@@ -101,6 +102,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         if(this.weightDelta == null){
             this.weightDelta = new float[inputSize * outputSize];
         }
+        this.newDelta = new float[inputSize];
 
         // 実際はコンストラクタで処理できるけど、JSONにデータ出力したくないときのために。
         if(bias == null){

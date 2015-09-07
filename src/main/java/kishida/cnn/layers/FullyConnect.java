@@ -5,6 +5,7 @@
  */
 package kishida.cnn.layers;
 
+import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.ConvolutionalNet;
@@ -27,6 +28,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     float dropoutRate = 1;
     float learningRate;
     boolean useGpu;
+	float[] newDelta;
+	float[] diffed;
 
     public FullyConnect(String name, NeuralLayer preLayer, int out, float initBias, float dropoutRate, ActivationFunction activation, float learningRate, boolean useGpu) {
         this(name, preLayer.getOutputSize(), out,initBias, dropoutRate, activation, learningRate, useGpu);
@@ -56,6 +59,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         this.weight = weight;
         this.bias = bias;
         this.useGpu = useGpu;
+        this.newDelta = new float[in];
+        this.diffed = new float[out];
     }
 
     public void prepareDropout() {
@@ -81,12 +86,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public float[] backward(float[] in, float[] delta) {
-        /*
-        float[][] oldweight = Arrays.stream(weight).parallel()
-        .map(row -> Arrays.copyOf(row, row.length))
-        .toArray(float[][]::new);*/
-        float[] newDelta = new float[in.length];
-        float[] diffed = new float[result.length];
+        Arrays.fill(newDelta, 0);
+		Arrays.fill(diffed, 0);
         for(int i = 0; i < result.length; ++i){
                 diffed[i] = activation.diff(result[i]);
         }

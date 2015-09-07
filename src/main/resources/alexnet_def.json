@@ -109,7 +109,7 @@
   }, {
     "FullyConnect" : {
       "name" : "fc2",
-      "outputSize" : 7,
+      "outputSize" : 257,
       "initBias" : 1.0,
       "dropoutRate" : 1.0,
       "activation" : "SoftMaxFunction",

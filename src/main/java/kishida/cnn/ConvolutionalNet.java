@@ -12,8 +12,7 @@ import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
@@ -119,7 +118,7 @@ public class ConvolutionalNet {
                                 Stream.of(new Img(p, true, i, j), new Img(p, false, i, j)))
                                 .flatMap(Function.identity())).flatMap(Function.identity()))
 
-                //.map(p -> new Img(p, true, 0, 0))
+                //.map(p -> new Img(p, false, 0, 0))
                 .collect(Collectors.toList());
 
 
@@ -190,16 +189,15 @@ public class ConvolutionalNet {
 
         NeuralNetwork nn;
 
-
+        /*
         try(InputStream is = ConvolutionalNet.class.getResourceAsStream(RESOURCE_NAME);
                 InputStreamReader isr = new InputStreamReader(is)){
             nn = NeuralNetwork.readFromJson(isr);
-        }
+        }*/
 
-        /*
         try(Reader r = Files.newBufferedReader(Paths.get(FILENAME))){
             nn = NeuralNetwork.readFromJson(r);
-        }*/
+        }
 
         nn.init();
         nn.getLayers().forEach(System.out::println);
@@ -289,7 +287,7 @@ public class ConvolutionalNet {
                 historyData.add(rateData.stream().mapToDouble(d -> d).sum()
                         / rateData.size());
                 Image lineGraph = createLineGraph(500, 200,
-                        historyData.stream().mapToDouble(d -> d).toArray(), 1, 0);
+                        historyData, 1, 0);
                 historyLabel.setIcon(new ImageIcon(lineGraph));
                 //一段目のフィルタの表示
                 //全結合一段の表示
@@ -374,16 +372,16 @@ public class ConvolutionalNet {
         g.dispose();
         return result;
     }
-    static Image createLineGraph(int width, int height, double[] data, float max, float min){
+    static Image createLineGraph(int width, int height, List<Double> data, float max, float min){
         BufferedImage result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = (Graphics2D) result.getGraphics();
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, width, height);
         g.setColor(Color.BLACK);
-        int step = data.length / width + 1;
-        for(int i = step; i < data.length; i += step){
-            g.drawLine((i - step) * width / data.length, (int)((data[i - 1] - max) * (height - 10) / (min - max) - 5)
-                    , i * width / data.length, (int)((data[i] - max) * (height - 10)/ (min - max)) - 5);
+        int step = data.size() / (width * 3) + 1;
+        for(int i = step; i < data.size(); i += step){
+            g.drawLine((i - 1) * width / data.size(), (int)((data.get(i - step) - max) * (height - 10) / (min - max) - 5)
+                    , i * width / data.size(), (int)((data.get(i) - max) * (height - 10)/ (min - max)) - 5);
         }
         g.dispose();
         return result;
@@ -584,7 +582,7 @@ public class ConvolutionalNet {
             }
         }
     }
-    static float[] normalizeImage(float[] data){
+    private static float[] normalizeImage(float[] data){
         int size = data.length / 3;
         float[] result = new float[data.length];
         for(int i = 0; i < 3; ++i){

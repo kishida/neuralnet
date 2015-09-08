@@ -186,7 +186,7 @@ public class NeuralNetwork {
                 new MaxPoolingLayer("pool", 3, 2),
                 new MultiNormalizeLayer("norm1", 5, .0001f, true),
                 new FullyConnect("test", 3, 0, 1, new LogisticFunction(), true)));
-        //nn.init();
+        nn.init();
         nn.random.nextInt();
         StringWriter sw = new StringWriter();
         nn.writeAsJson(sw);
@@ -235,7 +235,8 @@ public class NeuralNetwork {
 "      \"outputSize\" : 3,\n" +
 "      \"weight\" : [ 0.0014115907, 0.0043465886, 0.01138472, -0.0013297468, "
                 + "-0.0060525155, -0.0109255025, -0.015493984, 0.011872963, -0.0015145391 ],\n" +
-"      \"bias\" : [ 0.0, 0.0, 0.0 ],\n" +
+"      \"initBias\" : 0.5, " +
+"      \"bias\" : [ 0.0, 0.2, 0.4 ],\n" +
 "      \"weightDelta\" : [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ],\n" +
 "      \"biasDelta\" : [ 0.0, 0.0, 0.0 ],\n" +
 "      \"dropoutRate\" : 1.0,\n" +
@@ -250,6 +251,13 @@ public class NeuralNetwork {
         v.findLayerByName("test").ifPresent(layer -> {
             FullyConnect f = (FullyConnect) layer;
             System.out.println(f.getActivation().getClass());
+            System.out.println(Arrays.toString(f.getBias()));
+        });
+        v.init();
+        v.findLayerByName("test").ifPresent(layer -> {
+            FullyConnect f = (FullyConnect) layer;
+            System.out.println(f.getActivation().getClass());
+            System.out.println(Arrays.toString(f.getBias()));
         });
     }
 

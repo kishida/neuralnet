@@ -147,7 +147,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     @Override
     public float[] backward(float[] in, float[] delta) {
         Arrays.fill(newDelta, 0);
-		Arrays.fill(diffed, 0);
+        Arrays.fill(diffed, 0);
         for(int i = 0; i < result.length; ++i){
                 diffed[i] = activation.diff(result[i]);
         }

@@ -95,7 +95,7 @@
       "initBias" : 1.0,
       "dropoutRate" : 0.5,
       "activation" : "RectifiedLinear",
-      "useGpu" : true
+      "useGpu" : false
     }
   }, {
     "FullyConnect" : {

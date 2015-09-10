@@ -89,9 +89,13 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         outputWidth = inputWidth / stride;
         outputHeight = inputHeight / stride;
 
-        this.filter = FloatUtil.createGaussianArray(filterSize * filterSize *
+        if(filter == null){
+            this.filter = FloatUtil.createGaussianArray(filterSize * filterSize *
                 inputChannels * outputChannels, 0.01f, parent.getRandom());
-        this.filterDelta = new float[filter.length];
+        }
+        if(filterDelta == null){
+            this.filterDelta = new float[filter.length];
+        }
 
         // コンストラクタで処理できるけど、JSONデータ出力で省略できるように。
         if(bias == null){

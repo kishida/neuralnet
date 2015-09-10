@@ -22,6 +22,7 @@ import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
+import lombok.Setter;
 
 /** 畳み込み層 */
 public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
@@ -43,7 +44,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     @Getter
     int filterSize;
     private ActivationFunction activation;
-    @Getter
+    @Getter @Setter
     boolean useGpu;
     @Getter
     float initBias;

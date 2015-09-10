@@ -15,6 +15,7 @@ import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.kernels.FullyForwardKernel;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  *
@@ -40,7 +41,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private int[] dropout;
     @Getter
     private float dropoutRate = 1;
-    @Getter
+    @Getter @Setter
     private boolean useGpu;
     private float[] newDelta;
     private float[] diffed;

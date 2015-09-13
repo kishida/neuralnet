@@ -171,7 +171,7 @@ public class ConvolutionalNet {
             new ConvolutionLayer("conv4", 384, 3, 1, 1, USE_GPU1),
             new ConvolutionLayer("conv5", 256, 3, 1, 1, USE_GPU1),
             new MaxPoolingLayer("pool5", 3, 2),
-            new FullyConnect("fc0", 4096, 1, .5f, new RectifiedLinear(), USE_GPU1),
+            new FullyConnect("fc0", 4096, 1, .5f, new RectifiedLinear(), false),
 
             //全結合1
             new FullyConnect("fc1", FULL_1ST, 1, 0.5f, new RectifiedLinear(), USE_GPU1),
@@ -215,6 +215,7 @@ public class ConvolutionalNet {
                 .orElseThrow(() -> new IllegalArgumentException("norm1 not found"));
         int[] lastHour = {LocalTime.now().getHour()};
         int[] count = {0};
+        int[] batchCount = {0};
         for(; nn.getLoop() < 30; nn.setLoop(nn.getLoop() + 1)){
             nn.saveImageRandomState();
             Collections.shuffle(files, nn.getImageRandom());
@@ -307,8 +308,8 @@ public class ConvolutionalNet {
                 nn.setImageIndex(nn.getImageIndex() + 1);
                 if(count[0] >= MINI_BATCH){
                     nn.joinBatch();
-
-                    System.out.printf("%4d %.2f %s %s%n",
+                    batchCount[0]++;
+                    System.out.printf("%5d %4d %.2f/m %s %s%n", batchCount[0],
                             count[0], MINI_BATCH * 60 * 1000. / (System.currentTimeMillis() - pStart[0]),
                             ConvolutionForwardKernel.INSTANCE.getExecutionMode(),
                             ConvolutionBackwordKernel.INSTANCE.getExecutionMode());

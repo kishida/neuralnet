@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.stream.IntStream;
 import kishida.cnn.activation.LogisticFunction;
 import kishida.cnn.layers.ConvolutionLayer;
 import kishida.cnn.layers.FullyConnect;
@@ -191,6 +192,19 @@ public class NeuralNetwork {
         StringWriter sw = new StringWriter();
         nn.writeAsJson(sw);
         System.out.println(sw);
+
+        // 保存したものがちゃんと再現できるか確認
+        StringReader sr0 = new StringReader(sw.toString());
+        NeuralNetwork nn0 = nn.readFromJson(sr0);
+        nn0.init();
+        ConvolutionLayer conv1o = (ConvolutionLayer) nn.findLayerByName("conv1").get();
+        ConvolutionLayer conv1r = (ConvolutionLayer) nn0.findLayerByName("conv1").get();
+        System.out.println("org:"+Arrays.toString(conv1o.getFilter()));
+        System.out.println("red:"+Arrays.toString(conv1r.getFilter()));
+        double loss = IntStream.range(0, conv1o.getFilter().length)
+                .mapToDouble(i -> (conv1o.getFilter()[i] - conv1r.getFilter()[i]) * (conv1o.getFilter()[i] - conv1r.getFilter()[i]))
+                .sum();
+        System.out.println(Math.sqrt(loss));
 
         NeuralNetwork v = NeuralNetwork.readFromJson(new StringReader(
 "{\n" +

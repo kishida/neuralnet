@@ -5,7 +5,16 @@
  */
 package kishida.cnn.activation;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+
 /** 活性化関数 */
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
+@JsonSubTypes({
+        @JsonSubTypes.Type(LogisticFunction.class),
+        @JsonSubTypes.Type(RectifiedLinear.class),
+        @JsonSubTypes.Type(SoftMaxFunction.class),
+})
 public abstract class ActivationFunction {
 
     public abstract float apply(float value);

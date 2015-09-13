@@ -6,21 +6,16 @@
 package kishida.cnn.activation;
 
 /** 正規化線形関数 */
-public class LimitedRetifierdLinear extends ActivationFunction {
-    float limit;
-
-    public LimitedRetifierdLinear(float limit) {
-        this.limit = limit;
-    }
+public class RectifiedLinear extends ActivationFunction {
 
     @Override
     public float apply(float value) {
-        return Math.max(0, Math.min(value, 2));
+        return value >= 0 ? value : 0;
     }
 
     @Override
     public float diff(float value) {
-        return value >= 0 && value <= 2 ? 1 : 0;
+        return value >= 0 ? 1 : 0;
     }
 
 }

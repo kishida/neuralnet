@@ -5,35 +5,48 @@
  */
 package kishida.cnn.layers;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.stream.IntStream;
-import kishida.cnn.activation.LinearFunction;
+import lombok.Getter;
 
 /**
  *
  * @author naoki
  */
 public class MultiNormalizeLayer extends ImageNeuralLayer{
-    public MultiNormalizeLayer(String name, int size, float threshold, ImageNeuralLayer preLayer, boolean useGpu) {
-        this(name, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputHeight, preLayer, size, threshold, useGpu);
-    }
+    @Getter
+    int size;
+    @Getter
+    float threshold;
+    @Getter
+    boolean useGpu;
 
+    float[] averages;
+    float[] rates;
 
-    public MultiNormalizeLayer(String name, int inputChannels, int inputWidth, int inputHeight, ImageNeuralLayer preLayer, int size, float threshold, boolean useGpu) {
-        super(name, new LinearFunction(), inputChannels, inputWidth, inputHeight, inputChannels, inputWidth, inputHeight);
-        this.preLayer = preLayer;
+    @JsonCreator
+    public MultiNormalizeLayer(
+            @JsonProperty("name") String name,
+            @JsonProperty("size") int size,
+            @JsonProperty("threshold") float threshold,
+            @JsonProperty("useGpu") boolean useGpu) {
+        super(name);
         this.size = size;
         this.threshold = threshold;
         this.useGpu = useGpu;
+    }
+
+    @Override
+    public final void setPreLayer(NeuralLayer preLayer) {
+        super.setPreLayer(preLayer);
+        outputChannels = inputChannels;
+        outputWidth = inputWidth;
+        outputHeight = inputHeight;
         averages = new float[inputWidth * inputHeight];
         rates = new float[inputWidth * inputHeight];
         result = new float[inputChannels * inputHeight * inputWidth];
     }
-
-    float[] averages;
-    float[] rates;
-    int size;
-    float threshold;
-    boolean useGpu;
 
     @Override
     public float[] forward(float[] in) {

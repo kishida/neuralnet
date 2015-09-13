@@ -5,31 +5,41 @@
  */
 package kishida.cnn.layers;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Arrays;
 import java.util.stream.IntStream;
-import kishida.cnn.activation.LinearFunction;
+import lombok.Getter;
 
 /**
  *
  * @author naoki
  */
 public class MaxPoolingLayer extends ImageNeuralLayer {
+    @Getter
     int size;
+    @Getter
     int stride;
+    float[] newDelta;
 
-    public MaxPoolingLayer(String name, int size, int stride, ImageNeuralLayer preLayer) {
-        this(name, size, stride, preLayer.outputChannels, preLayer.outputWidth, preLayer.outputHeight);
-        this.preLayer = preLayer;
-    }
-
-    public MaxPoolingLayer(String name, int size, int stride, int channels, int inputWidth, int inputHeight) {
-        super(name, new LinearFunction(),
-                channels, inputWidth, inputHeight,
-                channels, inputWidth / stride, inputHeight / stride);
+    @JsonCreator
+    public MaxPoolingLayer(
+            @JsonProperty("name") String name,
+            @JsonProperty("size") int size,
+            @JsonProperty("stride") int stride) {
+        super(name);
         this.size = size;
         this.stride = stride;
+    }
+
+    @Override
+    public final void setPreLayer(NeuralLayer preLayer) {
+        super.setPreLayer(preLayer);
+        outputChannels = inputChannels;
+        outputWidth = inputWidth / stride;
+        outputHeight = inputHeight / stride;
         result = new float[outputChannels * outputWidth * outputHeight];
-        newDelta = new float[channels * inputWidth * inputHeight];
+        newDelta = new float[inputChannels * inputWidth * inputHeight];
     }
 
     /** プーリング(max) */
@@ -62,7 +72,6 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
         return result;
     }
 
-    float[] newDelta;
     @Override
     public float[] backward(float[] in, float[] delta) {
         Arrays.fill(newDelta, 0);

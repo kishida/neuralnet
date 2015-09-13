@@ -5,24 +5,45 @@
  */
 package kishida.cnn.layers;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.util.DoubleSummaryStatistics;
 import java.util.Objects;
-import kishida.cnn.activation.ActivationFunction;
+import kishida.cnn.NeuralNetwork;
 import kishida.cnn.util.FloatUtil;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  *
  * @author naoki
  */
-public abstract class NeuralLayer {
-    String name;
-    float[] result;
-    NeuralLayer preLayer;
-    ActivationFunction activation;
+@JsonTypeInfo(use=JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.WRAPPER_OBJECT)
+@JsonSubTypes({
+    @JsonSubTypes.Type(FullyConnect.class),
+    @JsonSubTypes.Type(ConvolutionLayer.class),
+    @JsonSubTypes.Type(MultiNormalizeLayer.class),
+    @JsonSubTypes.Type(MaxPoolingLayer.class),
+    @JsonSubTypes.Type(InputLayer.class),
 
-    public NeuralLayer(String name, ActivationFunction activation) {
+})
+public abstract class NeuralLayer {
+    @Getter
+    String name;
+
+    @JsonIgnore
+    @Getter
+    float[] result;
+
+    @Setter
+    NeuralLayer preLayer;
+
+    @Setter
+    NeuralNetwork parent;
+
+    public NeuralLayer(String name) {
         this.name = name;
-        this.activation = activation;
     }
 
     public float[] forward() {
@@ -38,22 +59,17 @@ public abstract class NeuralLayer {
 
     public abstract float[] backward(float[] in, float[] delta);
 
-    public void prepareBatch(float momentam){
+    public void prepareBatch(){
         // do nothing as default
     }
-    public void joinBatch(int count, float weightDecay, float learningRate){
+    public void joinBatch(){
         // do nothing as default
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public float[] getResult() {
-        return result;
-    }
-
+    @JsonIgnore
     public abstract int getOutputSize();
+
+    @JsonIgnore
     public DoubleSummaryStatistics getResultStatistics(){
         return FloatUtil.summary(result);
     }

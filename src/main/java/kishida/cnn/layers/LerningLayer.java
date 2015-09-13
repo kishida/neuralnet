@@ -5,6 +5,7 @@
  */
 package kishida.cnn.layers;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.DoubleSummaryStatistics;
 
 /**
@@ -12,6 +13,8 @@ import java.util.DoubleSummaryStatistics;
  * @author naoki
  */
 public interface LerningLayer {
+    @JsonIgnore
     DoubleSummaryStatistics getWeightStatistics();
+    @JsonIgnore
     DoubleSummaryStatistics getBiasStatistics();
 }

@@ -1,0 +1,119 @@
+{
+  "weightDecay" : 5.0E-4,
+  "miniBatch" : 128,
+  "momentam" : 0.9,
+  "learningRate" : 0.01,
+  "randomSeed" : 1234,
+  "imageRandomSeed" : 2345,
+  "layers" : [ {
+    "InputLayer" : {
+      "width" : 227,
+      "height" : 227,
+      "name" : "input"
+    }
+  }, {
+    "ConvolutionLayer" : {
+      "name" : "conv1",
+      "filterSize" : 11,
+      "filterCount" : 96,
+      "stride" : 4,
+      "initBias" : 0.0,
+      "useGpu" : true
+    }
+  }, {
+    "MaxPoolingLayer" : {
+      "name" : "pool1",
+      "size" : 3,
+      "stride" : 2
+    }
+  }, {
+    "MultiNormalizeLayer" : {
+      "name" : "norm1",
+      "size" : 5,
+      "threshold" : 1.0E-6,
+      "useGpu" : true
+    }
+  }, {
+    "ConvolutionLayer" : {
+      "name" : "conv2",
+      "filterSize" : 5,
+      "filterCount" : 256,
+      "stride" : 1,
+      "initBias" : 1.0,
+      "useGpu" : true
+    }
+  }, {
+    "MaxPoolingLayer" : {
+      "name" : "pool2",
+      "size" : 3,
+      "stride" : 2
+    }
+  }, {
+    "MultiNormalizeLayer" : {
+      "name" : "norm2",
+      "size" : 5,
+      "threshold" : 1.0E-6,
+      "useGpu" : true
+    }
+  }, {
+    "ConvolutionLayer" : {
+      "name" : "conv3",
+      "filterSize" : 3,
+      "filterCount" : 384,
+      "stride" : 1,
+      "initBias" : 0.0,
+      "useGpu" : true
+    }
+  }, {
+    "ConvolutionLayer" : {
+      "name" : "conv4",
+      "filterSize" : 3,
+      "filterCount" : 384,
+      "stride" : 1,
+      "initBias" : 1.0,
+      "useGpu" : true
+    }
+  }, {
+    "ConvolutionLayer" : {
+      "name" : "conv5",
+      "filterSize" : 3,
+      "filterCount" : 256,
+      "stride" : 1,
+      "initBias" : 1.0,
+      "useGpu" : true
+    }
+  }, {
+    "MaxPoolingLayer" : {
+      "name" : "pool5",
+      "size" : 3,
+      "stride" : 2
+    }
+  }, {
+    "FullyConnect" : {
+      "name" : "fc0",
+      "outputSize" : 4096,
+      "initBias" : 1.0,
+      "dropoutRate" : 0.5,
+      "activation" : "RectifiedLinear",
+      "useGpu" : false
+    }
+  }, {
+    "FullyConnect" : {
+      "name" : "fc1",
+      "outputSize" : 4096,
+      "initBias" : 1.0,
+      "dropoutRate" : 0.5,
+      "activation" : "RectifiedLinear",
+      "useGpu" : true
+    }
+  }, {
+    "FullyConnect" : {
+      "name" : "fc2",
+      "outputSize" : 257,
+      "initBias" : 1.0,
+      "dropoutRate" : 1.0,
+      "activation" : "SoftMaxFunction",
+      "useGpu" : false
+    }
+  } ]
+}

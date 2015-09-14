@@ -41,7 +41,7 @@ import static kishida.cnn.util.ImageUtil.*;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final float learningRate = 0.01f;
+    private static final float learningRate = 0.001f;
     private static final float weightDecay = 0.0005f;
     private static final boolean USE_GPU1 = true;
     private static final boolean USE_GPU2 = true;

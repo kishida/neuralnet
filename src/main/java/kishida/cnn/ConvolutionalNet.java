@@ -48,7 +48,7 @@ import kishida.cnn.util.FloatUtil;
  * @author naoki
  */
 public class ConvolutionalNet {
-    private static final float learningRate = 0.011f;
+    private static final float learningRate = 0.001f;
     private static final float weightDecay = 0.0005f;
     public static Random random = new Random(1234);
     private static final boolean USE_GPU1 = true;

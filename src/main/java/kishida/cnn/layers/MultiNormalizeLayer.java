@@ -22,9 +22,6 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
     @Getter
     boolean useGpu;
 
-    float[] averages;
-    float[] rates;
-
     @JsonCreator
     public MultiNormalizeLayer(
             @JsonProperty("name") String name,
@@ -43,14 +40,11 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
         outputChannels = inputChannels;
         outputWidth = inputWidth;
         outputHeight = inputHeight;
-        averages = new float[inputWidth * inputHeight];
-        rates = new float[inputWidth * inputHeight];
         result = new float[inputChannels * inputHeight * inputWidth];
     }
 
     @Override
     public float[] forward(float[] in) {
-
         IntStream.range(0, inputWidth).parallel().forEach(x -> {
             for(int y = 0; y < inputHeight; ++y){
                 float total = 0;
@@ -90,8 +84,6 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
                     }
                 }
                 float std = Math.max(threshold, (float)Math.sqrt(variance / count));
-                averages[x * inputHeight + y] = average;
-                rates[x * inputHeight + y] = std;
                 for(int ch = 0; ch < inputChannels; ++ch){
                     int pos = ch * inputHeight * inputWidth + x * inputHeight + y;
                     result[pos] = (in[pos] - average) / std;

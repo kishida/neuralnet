@@ -51,7 +51,6 @@ public class ConvolutionBackwordDeltaKernel extends Kernel {
         }
         newDelta[chxxyy] = tempDelta;
     }
-    float[] input;
     float[] result;
     int inputChannels;
     int inputWidth;
@@ -65,11 +64,10 @@ public class ConvolutionBackwordDeltaKernel extends Kernel {
     float[] delta;
     float[] newDelta;
 
-    public float[] backword(float[] input, float[] delta, float[] result,
+    public float[] backword(float[] delta, float[] result,
             int inputChannels, int inputWidth, int inputHeight,
             float[] filter, int outputChannels, int outputWidth, int outputHeight,
-            int filterSize, int stride, boolean useGpu) {
-        this.input = input;
+            int filterSize, int stride, float[] newDelta, boolean useGpu) {
         this.delta = delta;
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;
@@ -81,12 +79,11 @@ public class ConvolutionBackwordDeltaKernel extends Kernel {
         this.filterSize = filterSize;
         this.stride = stride;
         this.result = result;
-        this.newDelta = new float[inputChannels * inputWidth * inputHeight];
+        this.newDelta = newDelta;
         if (useGpu) {
             put(filter);
             put(delta);
             put(result);
-            put(input);
             execute(inputChannels * inputWidth * inputHeight);
             get(newDelta);
         } else {

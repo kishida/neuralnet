@@ -8,6 +8,8 @@ import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.io.Writer;
@@ -57,8 +59,10 @@ public class ConvolutionalNet {
     private static final int MINI_BATCH = 128;
     private static final float MOMENTAM = 0.9f;
     public static final String AVERAGE_PNG = "average.png";
-    private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\alexnet.json.txt";
-    private static final String RESOURCE_NAME = "/alexnet_def.json";
+    //private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\alexnet.json.txt";
+    //private static final String RESOURCE_NAME = "/alexnet_def.json";
+    private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\tinynet.json.txt";
+    private static final String RESOURCE_NAME = "/tinynet_def.json";
 
     static class Img{
 
@@ -89,6 +93,7 @@ public class ConvolutionalNet {
     static List<Double> historyData = new ArrayList<>();
     static LinkedList<Integer> rateData = new LinkedList<>();
 
+    @SuppressWarnings({"ThrowableInstanceNotThrown", "ThrowableInstanceNeverThrown"})
     public static void main(String[] args) throws IOException {
         System.setProperty("com.amd.aparapi.enableShowGeneratedOpenCL", "false");
         String def = "C:\\Users\\naoki\\Desktop\\sampleimg288";
@@ -184,14 +189,15 @@ public class ConvolutionalNet {
 
         NeuralNetwork nn;
 
-        /*
-        try(InputStream is = ConvolutionalNet.class.getResourceAsStream(RESOURCE_NAME);
-                InputStreamReader isr = new InputStreamReader(is)){
-            nn = NeuralNetwork.readFromJson(isr);
-        }*/
-
-        try(Reader r = Files.newBufferedReader(Paths.get(FILENAME))){
-            nn = NeuralNetwork.readFromJson(r);
+        if(true){
+            try(InputStream is = ConvolutionalNet.class.getResourceAsStream(RESOURCE_NAME);
+                    InputStreamReader isr = new InputStreamReader(is)){
+                nn = NeuralNetwork.readFromJson(isr);
+            }
+        }else{
+            try(Reader r = Files.newBufferedReader(Paths.get(FILENAME))){
+                nn = NeuralNetwork.readFromJson(r);
+            }
         }
 
         nn.init();

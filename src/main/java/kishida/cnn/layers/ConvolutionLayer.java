@@ -5,7 +5,6 @@
  */
 package kishida.cnn.layers;
 
-import com.amd.aparapi.Kernel;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -14,12 +13,10 @@ import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.activation.RectifiedLinear;
-import kishida.cnn.kernels.ConvolutionBackwordBiasKernel;
-import kishida.cnn.kernels.ConvolutionBackwordDeltaKernel;
-import kishida.cnn.kernels.ConvolutionBackwordFilterKernel;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
+import kishida.cnn.opencl.ConvolutionBackwordCL;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -49,6 +46,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     @Getter
     float initBias;
     float[] tempDelta;
+    float[] newDelta;
 
     public ConvolutionLayer(String name,
             int filterCount, int size, int stride, float initBias, boolean useGpu) {
@@ -108,6 +106,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
 
         this.result = new float[outputChannels * outputWidth * outputHeight];
         this.tempDelta = new float[result.length];
+        this.newDelta = new float[inputChannels * inputWidth * inputHeight];
     }
 
     /** 畳み込みフィルタを適用する */
@@ -153,9 +152,11 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     public float[] backward(float[] input, float[] delta) {
         if (useGpu) {
             // GPUバージョン
-            float[] newDelta = ConvolutionBackwordDeltaKernel.INSTANCE.backword(input, delta, result,
+            /*
+            ConvolutionBackwordDeltaKernel.INSTANCE.backword(delta, result,
                     inputChannels, inputWidth, inputHeight,
-                    filter, outputChannels, outputWidth, outputHeight, filterSize, stride, useGpu);
+                    filter, outputChannels, outputWidth, outputHeight,
+                    filterSize, stride, newDelta, useGpu);
             ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result,
                     input, inputChannels, inputWidth, inputHeight,
                     filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, parent.getLearningRate(), useGpu);
@@ -171,15 +172,20 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                 System.out.println("delta" + ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode());
                 System.out.println("filter" + ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode());
                 System.out.println("bias" + ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode());
-            }
-            return newDelta;
+            }*/
+            
+            return ConvolutionBackwordCL.INSTANCE.backward(
+                    delta, result, input,
+                    inputChannels, inputWidth, inputHeight,
+                    filter, outputChannels, outputWidth, outputHeight,
+                    filterDelta, biasDelta, filterSize, stride, newDelta, initBias);
         } else {
             // CPUバージョン
             return ConvolutionBackwordKernel.INSTANCE.backward(delta, result,
                     input, inputChannels, inputWidth, inputHeight,
                     filter, outputChannels, outputWidth, outputHeight,
                     filterDelta, biasDelta,
-                    filterSize, stride, bias, parent.getLearningRate(), false);
+                    filterSize, stride, parent.getLearningRate(), false);
         }
     }
 

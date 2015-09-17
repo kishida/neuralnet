@@ -62,7 +62,7 @@ public class ConvolutionBackwordKernel extends Kernel {
     int outputHeight;
     int filterSize;
     int stride;
-    float[] bias;
+    //float[] bias;
     float[] delta;
     float learningRate;
     float[] tempDelta;
@@ -74,7 +74,7 @@ public class ConvolutionBackwordKernel extends Kernel {
             float[] input, int inputChannels, int inputWidth, int inputHeight,
             float[] filter, int outputChannels, int outputWidth, int outputHeight,
             float[] filterDelta, float[] biasDelta,
-            int filterSize, int stride, float[] bias, float learningRate, boolean useGpu) {
+            int filterSize, int stride, float learningRate, boolean useGpu) {
         this.delta = delta;
         this.input = input;
         this.inputChannels = inputChannels;
@@ -86,7 +86,7 @@ public class ConvolutionBackwordKernel extends Kernel {
         this.outputHeight = outputHeight;
         this.filterSize = filterSize;
         this.stride = stride;
-        this.bias = bias;
+        //this.bias = bias;
         this.result = result;
         this.tempDelta = new float[outputChannels * inputChannels * inputWidth * inputHeight];
         this.learningRate = learningRate;// / (outputWidth * outputHeight);

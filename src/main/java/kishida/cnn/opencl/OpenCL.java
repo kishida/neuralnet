@@ -9,6 +9,7 @@ import com.jogamp.opencl.CLBuffer;
 import com.jogamp.opencl.CLCommandQueue;
 import com.jogamp.opencl.CLContext;
 import com.jogamp.opencl.CLDevice;
+import com.jogamp.opencl.CLKernel;
 import com.jogamp.opencl.CLMemory;
 import com.jogamp.opencl.CLProgram;
 import java.io.IOException;
@@ -25,10 +26,11 @@ public class OpenCL {
     static CLContext ctx;
     @Getter
     static CLCommandQueue queue;
+    static CLDevice device;
 
     public static void prepare(){
         ctx = CLContext.create();
-        CLDevice device = ctx.getMaxFlopsDevice();
+        device = ctx.getMaxFlopsDevice();
         System.out.println(device);
         queue = device.createCommandQueue();
     }
@@ -58,12 +60,12 @@ public class OpenCL {
     public static CLBuffer<FloatBuffer> createReadBuffer(float[] data){
         CLBuffer<FloatBuffer> buf = getCtx().createFloatBuffer(
                 data.length, CLMemory.Mem.READ_ONLY);
-        buf.getBuffer().put(data);
+        buf.getBuffer().put(data).rewind();//rewindしないと不安定になる
         return buf;
     }
     public static CLBuffer<FloatBuffer> createReadWriteBuffer(float[] data){
         CLBuffer<FloatBuffer> buf = createReadWriteBuffer(data.length);
-        buf.getBuffer().put(data);
+        buf.getBuffer().put(data).rewind();//rewindしないと不安定になる
         return buf;
     }
     public static CLBuffer<FloatBuffer> createReadWriteBuffer(int size){
@@ -74,5 +76,15 @@ public class OpenCL {
     }
     public static CLBuffer<FloatBuffer> createWriteBuffer(int size){
         return getCtx().createFloatBuffer(size, CLMemory.Mem.WRITE_ONLY);
+    }
+
+    public static CLCommandQueue execute(CLKernel kernel, int range){
+        int localWorkSize = Math.min(device.getMaxWorkGroupSize(), 256);
+        int globalWorkSize = roundUp(localWorkSize, range);
+        kernel.putArg(range);
+        return getQueue().put1DRangeKernel(kernel, 0, globalWorkSize, localWorkSize);
+    }
+    static  int roundUp(int groupSize, int globalSize){
+        return ((globalSize + groupSize - 1) / groupSize) * groupSize;
     }
 }

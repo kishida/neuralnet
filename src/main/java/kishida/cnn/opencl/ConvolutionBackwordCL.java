@@ -38,13 +38,13 @@ public class ConvolutionBackwordCL {
         CLBuffer<FloatBuffer> bufTempBias = OpenCL.createReadWriteBuffer(result.length);
         CLBuffer<FloatBuffer> bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
         CLBuffer<FloatBuffer> bufNewDelta = OpenCL.createWriteBuffer(newDelta.length);
-
-        OpenCL.getQueue()
+        OpenCL.getQueue().putBarrier()
                 .putWriteBuffer(bufDelta, false)
                 .putWriteBuffer(bufFilter, false)
                 .putWriteBuffer(bufResult, false)
                 .putWriteBuffer(bufInput, false)
                 .putWriteBuffer(bufFilterDelta, false)
+                .putWriteBuffer(bufTempBias, false)
                 .putWriteBuffer(bufBiasDelta, false);
 
         CLKernel deltaKernel = prog.createCLKernel("delta");
@@ -62,9 +62,8 @@ public class ConvolutionBackwordCL {
                         bufFilter)
                 .putArg(inputChannels)
                 .putArg(bufNewDelta);
-        OpenCL.getQueue()
-                .put1DRangeKernel(deltaKernel, 0,
-                        inputChannels * inputWidth * inputHeight, 256);
+        OpenCL.execute(deltaKernel,
+                inputChannels * inputWidth * inputHeight);
         deltaKernel.release();
 
         CLKernel filterKernel = prog.createCLKernel("filter");
@@ -82,10 +81,9 @@ public class ConvolutionBackwordCL {
                 .putArg(learningRate)
                 .putArgs(
                         bufInput,
-                        bufFilter);
-        OpenCL.getQueue()
-                .put1DRangeKernel(filterKernel, 0,
-                        outputChannels * inputChannels * filterSize * filterSize, 128);
+                        bufFilterDelta);
+        OpenCL.execute(filterKernel,
+                outputChannels * inputChannels * filterSize * filterSize);
         filterKernel.release();
 
         CLKernel biasKernel = prog.createCLKernel("bias");
@@ -95,10 +93,19 @@ public class ConvolutionBackwordCL {
                         bufDelta,
                         bufTempBias)
                 .putArg(learningRate);
-        OpenCL.getQueue()
-                .put1DRangeKernel(biasKernel, 0,
-                        outputChannels * outputWidth * outputHeight, 128);
+        OpenCL.execute(biasKernel,
+                outputChannels * outputWidth * outputHeight);
         biasKernel.release();
+
+        /*
+        OpenCL.getQueue().putReadBuffer(bufTempBias, true);
+        float[] tempBias = new float[result.length];
+        bufTempBias.getBuffer().get(tempBias).rewind();
+
+        float[] compTempBias = new float[tempBias.length];
+        for(int i = 0; i < compTempBias.length; ++i){
+            compTempBias[i] = result[i] >= 0 ? delta[i] * learningRate : 0;
+        }*/
 
         CLKernel biasAfterKernel = prog.createCLKernel("biasAfter");
         biasAfterKernel
@@ -107,13 +114,51 @@ public class ConvolutionBackwordCL {
                 .putArgs(
                         bufTempBias,
                         bufBiasDelta);
+        OpenCL.execute(biasAfterKernel, outputChannels);
+        biasAfterKernel.release();
         OpenCL.getQueue()
-                .put1DRangeKernel(biasAfterKernel, 0, outputChannels, 16)
-                .putReadBuffer(bufBiasDelta, false)
-                .putReadBuffer(bufFilterDelta, false)
+                .putReadBuffer(bufBiasDelta, true)
+                .putReadBuffer(bufFilterDelta, true)
                 .putReadBuffer(bufNewDelta, true);
         bufNewDelta.getBuffer().get(newDelta);
-        biasAfterKernel.release();
+        bufFilterDelta.getBuffer().get(filterDelta);
+        bufBiasDelta.getBuffer().get(biasDelta);
+
+        bufDelta.release();
+        bufFilter.release();
+        bufResult.release();
+        bufInput.release();
+        bufFilterDelta.release();
+        bufTempBias.release();
+        bufBiasDelta.release();
+        bufNewDelta.release();
+
         return newDelta;
+    }
+
+    public static void main(String[] args) {
+        int inputChannels = 3;
+        int inputWidth = 200;
+        int inputHeight = 200;
+        int stride = 3;
+        int filterSize = 11;
+        int outputChannels = 24;
+        int outputWidth = inputWidth / stride;
+        int outputHeight = inputHeight / stride;
+        float[] input = new float[inputChannels * inputWidth * inputHeight];
+        float[] newDelta = new float[input.length];
+        float[] filter = new float[inputChannels * outputChannels * filterSize * filterSize];
+        float[] filterDelta = new float[filter.length];
+        float[] biasDelta = new float[outputChannels];
+        float[] result = new float[outputChannels * outputWidth * outputHeight];
+        float[] delta = new float[result.length];
+        float learningRate = 0.001f;
+
+        for(int i = 0; i < 3; ++i){
+            System.out.println(i + 1);
+        ConvolutionBackwordCL.INSTANCE.backward(delta, result,
+                input, inputChannels, inputWidth, inputHeight,
+                filter, outputChannels, outputWidth, outputHeight, filterDelta, biasDelta, filterSize, stride, newDelta, learningRate);
+        }
     }
 }

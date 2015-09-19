@@ -10,9 +10,13 @@ __kernel void delta(
    __global float *delta, 
    __global float *filter, 
    int inputChannels, 
-   __global float *newDelta
+   __global float *newDelta,
+   int count
 ){
     int chxxyy = get_global_id(0);
+    if(chxxyy >= count){
+        return;
+    }
     int ch = chxxyy / (inputWidth * inputHeight);
     int xx = (chxxyy % (inputWidth * inputHeight)) / inputHeight;
     int yy = chxxyy % inputHeight;
@@ -27,7 +31,10 @@ __kernel void delta(
                 if ((((yy - j) + sizeHalf) % stride)==0 && y>=0 && y<outputHeight){
                    int fxy = (((f * outputWidth) * outputHeight) + (x * outputHeight)) + y;
                    float d = (result[fxy]>=0.0f)?delta[fxy]:0.0f;
-                   tempDelta = tempDelta + (d * filter[((((((f * inputChannels) * filterSize) * filterSize) + ((ch * filterSize) * filterSize)) + (i * filterSize)) + j)]);
+                   tempDelta = tempDelta + d * filter[
+                      f * inputChannels * filterSize * filterSize + 
+                      ch * filterSize * filterSize + 
+                      i * filterSize + j];
                 }
              }
           }
@@ -48,9 +55,13 @@ __kernel void filter(
    int inputHeight, 
    float learningRate, 
    __global float *input, 
-   __global float *filter
+   __global float *filter,
+   int count
 ){
     int fchij = get_global_id(0);
+    if(fchij >= count){
+        return;
+    }
     int f = fchij / ((inputChannels * filterSize) * filterSize);
     int ch = (fchij % ((inputChannels * filterSize) * filterSize)) / (filterSize * filterSize);
     int i = (fchij % (filterSize * filterSize)) / filterSize;
@@ -77,9 +88,13 @@ __kernel void bias(
     __global float *result, 
     __global float *delta, 
     __global float *tempBiasDelta, 
-    float learningRate
+    float learningRate,
+   int count
 ){
     int fxy = get_global_id(0);
+    if(fxy >= count){
+        return;
+    }
     float d = result[fxy]>=0.0f ? delta[fxy] : 0.0f;
     tempBiasDelta[fxy]  = learningRate * d;
 }
@@ -88,9 +103,13 @@ __kernel void biasAfter(
     int outputWidth,
     int outputHeight,
     __global float *tempBiasDelta,
-    __global float *biasDelta
+    __global float *biasDelta,
+   int count
 ){
     int f = get_global_id(0);
+    if(f >= count){
+        return;
+    }
     float b = 0;
     for(int xy = 0; xy < outputWidth * outputHeight; ++xy){
         b += tempBiasDelta[f * outputWidth * outputHeight + xy];

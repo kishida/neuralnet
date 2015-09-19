@@ -5,6 +5,7 @@
  */
 package kishida.cnn.layers;
 
+import com.amd.aparapi.Kernel;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -13,6 +14,9 @@ import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.activation.RectifiedLinear;
+import kishida.cnn.kernels.ConvolutionBackwordBiasKernel;
+import kishida.cnn.kernels.ConvolutionBackwordDeltaKernel;
+import kishida.cnn.kernels.ConvolutionBackwordFilterKernel;
 import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
@@ -152,33 +156,37 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     public float[] backward(float[] input, float[] delta) {
         if (useGpu) {
             // GPUバージョン
-            /*
-            ConvolutionBackwordDeltaKernel.INSTANCE.backword(delta, result,
-                    inputChannels, inputWidth, inputHeight,
-                    filter, outputChannels, outputWidth, outputHeight,
-                    filterSize, stride, newDelta, useGpu);
-            ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result,
-                    input, inputChannels, inputWidth, inputHeight,
-                    filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, parent.getLearningRate(), useGpu);
-            ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result,
-                    outputChannels, outputWidth, outputHeight, biasDelta, parent.getLearningRate(), tempDelta, useGpu);
-            if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
-                    ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
-                    ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
-                useGpu = false;
+            if(false){
+                // aparapi
+                ConvolutionBackwordDeltaKernel.INSTANCE.backword(delta, result,
+                        inputChannels, inputWidth, inputHeight,
+                        filter, outputChannels, outputWidth, outputHeight,
+                        filterSize, stride, newDelta, useGpu);
+                ConvolutionBackwordFilterKernel.INSTANCE.backword(delta, result,
+                        input, inputChannels, inputWidth, inputHeight,
+                        filterDelta, outputChannels, outputWidth, outputHeight, filterSize, stride, parent.getLearningRate(), useGpu);
+                ConvolutionBackwordBiasKernel.INSTANCE.backwordBias(delta, result,
+                        outputChannels, outputWidth, outputHeight, biasDelta, parent.getLearningRate(), tempDelta, useGpu);
+                if (ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
+                        ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU ||
+                        ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode() != Kernel.EXECUTION_MODE.GPU) {
+                    useGpu = false;
+                }
+                if (!useGpu) {
+                    System.out.println("Can't use GPU on " + name);
+                    System.out.println("delta" + ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode());
+                    System.out.println("filter" + ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode());
+                    System.out.println("bias" + ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode());
+                }
+                return newDelta;
+            }else{
+                // JOCL
+                return ConvolutionBackwordCL.INSTANCE.backward(
+                        delta, result, input,
+                        inputChannels, inputWidth, inputHeight,
+                        filter, outputChannels, outputWidth, outputHeight,
+                        filterDelta, biasDelta, filterSize, stride, newDelta, parent.getLearningRate());
             }
-            if (!useGpu) {
-                System.out.println("Can't use GPU on " + name);
-                System.out.println("delta" + ConvolutionBackwordDeltaKernel.INSTANCE.getExecutionMode());
-                System.out.println("filter" + ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode());
-                System.out.println("bias" + ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode());
-            }*/
-            
-            return ConvolutionBackwordCL.INSTANCE.backward(
-                    delta, result, input,
-                    inputChannels, inputWidth, inputHeight,
-                    filter, outputChannels, outputWidth, outputHeight,
-                    filterDelta, biasDelta, filterSize, stride, newDelta, initBias);
         } else {
             // CPUバージョン
             return ConvolutionBackwordKernel.INSTANCE.backward(delta, result,

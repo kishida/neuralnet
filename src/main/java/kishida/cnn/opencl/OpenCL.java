@@ -15,6 +15,7 @@ import com.jogamp.opencl.CLProgram;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import lombok.Getter;
 
 /**
@@ -77,7 +78,12 @@ public class OpenCL {
     public static CLBuffer<FloatBuffer> createWriteBuffer(int size){
         return getCtx().createFloatBuffer(size, CLMemory.Mem.WRITE_ONLY);
     }
-
+    public static CLBuffer<IntBuffer> createReadBuffer(int[] data){
+        CLBuffer<IntBuffer> buf = getCtx().createIntBuffer(
+                data.length, CLMemory.Mem.READ_ONLY);
+        buf.getBuffer().put(data).rewind();
+        return buf;
+    }
     public static CLCommandQueue execute(CLKernel kernel, int range){
         int localWorkSize = Math.min(device.getMaxWorkGroupSize(), 256);
         int globalWorkSize = roundUp(localWorkSize, range);

@@ -17,5 +17,9 @@ public class RectifiedLinear extends ActivationFunction {
     public float diff(float value) {
         return value >= 0 ? 1 : 0;
     }
+    @Override
+    public String getName() {
+        return "relu";
+    }
 
 }

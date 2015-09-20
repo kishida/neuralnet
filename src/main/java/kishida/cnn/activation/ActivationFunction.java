@@ -28,4 +28,5 @@ public abstract class ActivationFunction {
     /** 微分 */
     public abstract float diff(float value);
 
+    public abstract String getName();
 }

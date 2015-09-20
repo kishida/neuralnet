@@ -13,6 +13,7 @@ import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.kernels.FullyForwardKernel;
+import kishida.cnn.opencl.FullyForwardCL;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -132,23 +133,24 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     @Override
     public float[] forward(float[] in) {
         prepareDropout();
-        Arrays.fill(result, 0);
-        FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
-        /*
-        IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
-            for (int i = 0; i < in.length; ++i) {
-                result[j] += in[i] * weight[i * out + j];
+        if(useGpu){
+            if(false){
+                FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
+                activation.applyAfter(result);
+            }else{
+                FullyForwardCL.INSTANCE.forward(inputSize, outputSize, dropout, in, weight, bias, result, activation);
             }
-            result[j] += bias[j];
-        });*/
-        activation.applyAfter(result);
+        }else{
+            FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
+            activation.applyAfter(result);
+        }
         return result;
     }
 
     @Override
     public float[] backward(float[] in, float[] delta) {
         Arrays.fill(newDelta, 0);
-        Arrays.fill(diffed, 0);
+        //Arrays.fill(diffed, 0);
         for(int i = 0; i < result.length; ++i){
                 diffed[i] = activation.diff(result[i]);
         }

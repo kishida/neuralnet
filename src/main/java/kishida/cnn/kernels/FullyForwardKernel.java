@@ -26,10 +26,13 @@ public class FullyForwardKernel extends Kernel{
 
     private void proc(int j){
         if(dropout[j] == 1){
+            float r = 0;
             for (int i = 0; i < inSize; ++i) {
-                result[j] += in[i] * weight[i * out + j];
+                r += in[i] * weight[i * out + j];
             }
-            result[j] += bias[j];
+            result[j] = r + bias[j];
+        }else{
+            result[j] = 0;
         }
     }
     int out;

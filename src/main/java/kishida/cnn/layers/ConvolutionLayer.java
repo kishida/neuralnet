@@ -21,6 +21,7 @@ import kishida.cnn.kernels.ConvolutionBackwordKernel;
 import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
 import kishida.cnn.opencl.ConvolutionBackwordCL;
+import kishida.cnn.opencl.ConvolutionForwardCL;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -116,11 +117,27 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     /** 畳み込みフィルタを適用する */
     @Override
     public float[] forward(float[] img) {
-        result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
-                filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias, activation, useGpu);
-        //localNormalization(result);
-        ConvolutionLocalNormalizationKernel.INSTANCE.localNormalization(result,
-                outputChannels, outputWidth, outputHeight, false);
+        if(true){
+            if(false){
+                // aparapi
+                result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
+                        filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias, activation, false);
+                //localNormalization(result);
+                ConvolutionLocalNormalizationKernel.INSTANCE.localNormalization(result,
+                        outputChannels, outputWidth, outputHeight, false);
+            } else{
+                // JOCL
+                result = ConvolutionForwardCL.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
+                        filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias);
+            }
+        }else {
+            //CPU
+            result = ConvolutionForwardKernel.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
+                    filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias, activation, false);
+            //localNormalization(result);
+            ConvolutionLocalNormalizationKernel.INSTANCE.localNormalization(result,
+                    outputChannels, outputWidth, outputHeight, false);
+        }
         return result;
     }
 

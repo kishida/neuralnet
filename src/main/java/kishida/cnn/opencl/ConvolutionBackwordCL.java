@@ -38,7 +38,7 @@ public class ConvolutionBackwordCL {
         CLBuffer<FloatBuffer> bufTempBias = OpenCL.createReadWriteBuffer(result.length);
         CLBuffer<FloatBuffer> bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
         CLBuffer<FloatBuffer> bufNewDelta = OpenCL.createWriteBuffer(newDelta.length);
-        OpenCL.getQueue().putBarrier()
+        OpenCL.getQueue()
                 .putWriteBuffer(bufDelta, false)
                 .putWriteBuffer(bufFilter, false)
                 .putWriteBuffer(bufResult, false)
@@ -96,16 +96,6 @@ public class ConvolutionBackwordCL {
         OpenCL.execute(biasKernel,
                 outputChannels * outputWidth * outputHeight);
         biasKernel.release();
-
-        /*
-        OpenCL.getQueue().putReadBuffer(bufTempBias, true);
-        float[] tempBias = new float[result.length];
-        bufTempBias.getBuffer().get(tempBias).rewind();
-
-        float[] compTempBias = new float[tempBias.length];
-        for(int i = 0; i < compTempBias.length; ++i){
-            compTempBias[i] = result[i] >= 0 ? delta[i] * learningRate : 0;
-        }*/
 
         CLKernel biasAfterKernel = prog.createCLKernel("biasAfter");
         biasAfterKernel

@@ -6,9 +6,9 @@ __kernel void delta(
    int stride, 
    int outputWidth, 
    int outputHeight, 
-   __global float *result, 
-   __global float *delta, 
-   __global float *filter, 
+   __global const float *result, 
+   __global const float *delta, 
+   __global const float *filter, 
    int inputChannels, 
    __global float *newDelta,
    int count
@@ -48,13 +48,13 @@ __kernel void filter(
    int filterSize, 
    int outputWidth, 
    int outputHeight, 
-   __global float *result, 
-   __global float *delta, 
+   __global const float *result, 
+   __global const float *delta, 
    int stride, 
    int inputWidth, 
    int inputHeight, 
    float learningRate, 
-   __global float *input, 
+   __global const float *input, 
    __global float *filter,
    int count
 ){
@@ -85,8 +85,8 @@ __kernel void filter(
 }
 
 __kernel void bias(
-    __global float *result, 
-    __global float *delta, 
+    __global const float *result, 
+    __global const float *delta, 
     __global float *tempBiasDelta, 
     float learningRate,
    int count
@@ -102,7 +102,7 @@ __kernel void bias(
 __kernel void biasAfter(
     int outputWidth,
     int outputHeight,
-    __global float *tempBiasDelta,
+    __global const float *tempBiasDelta,
     __global float *biasDelta,
    int count
 ){

@@ -8,11 +8,11 @@ package kishida.cnn.layers;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Arrays;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.kernels.FullyForwardKernel;
+import kishida.cnn.opencl.FullyBackwordCL;
 import kishida.cnn.opencl.FullyForwardCL;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
@@ -134,7 +134,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     public float[] forward(float[] in) {
         prepareDropout();
         if(useGpu){
-            if(false){
+            if(true){
                 FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
                 activation.applyAfter(result);
             }else{
@@ -149,24 +149,30 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public float[] backward(float[] in, float[] delta) {
-        Arrays.fill(newDelta, 0);
-        //Arrays.fill(diffed, 0);
-        for(int i = 0; i < result.length; ++i){
-                diffed[i] = activation.diff(result[i]);
-        }
-        IntStream.range(0, in.length).parallel().forEach((i) -> {
-            for (int j = 0; j < outputSize; ++j) {
-                if (dropout[j] != 1) {
-                    continue;
-                }
-                float d = diffed[j] * delta[j];
-                newDelta[i] += d *  weight[i * outputSize + j];//in[i] *;
-                weightDelta[i * outputSize + j] += d * in[i] * parent.getLearningRate();
+        if(false){
+            FullyBackwordCL.INSTANCE.backword(inputSize, outputSize,
+                    dropout, in, delta, result, weight, weightDelta, biasDelta, newDelta,
+                    parent.getLearningRate(), activation);
+        }else{
+            for(int i = 0; i < result.length; ++i){
+                    diffed[i] = activation.diff(result[i]);
             }
-        });
-        IntStream.range(0, outputSize).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
-            biasDelta[j] += diffed[j] * delta[j] * parent.getLearningRate();
-        });
+            IntStream.range(0, in.length).parallel().forEach((i) -> {
+                float nd = 0;
+                for (int j = 0; j < outputSize; ++j) {
+                    if (dropout[j] != 1) {
+                        continue;
+                    }
+                    float d = diffed[j] * delta[j];
+                    nd += d *  weight[i * outputSize + j];//in[i] *;
+                    weightDelta[i * outputSize + j] += d * in[i] * parent.getLearningRate();
+                }
+                newDelta[i] = nd;
+            });
+            IntStream.range(0, outputSize).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
+                biasDelta[j] += diffed[j] * delta[j] * parent.getLearningRate();
+            });
+        }
         return newDelta;
     }
 

@@ -48,20 +48,23 @@ public class FullyForwardCL {
            ActivationFunction activation){
         CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
         CLBuffer<FloatBuffer> bufResult = OpenCL.createReadWriteBuffer(result.length);
+        CLBuffer<IntBuffer> bufDropout = OpenCL.createReadBuffer(dropout);
 
         OpenCL.getQueue()
-                .putWriteBuffer(bufInput, false);
+                .putWriteBuffer(bufInput, false)
+                .putWriteBuffer(bufDropout, false);
 
-        forward(inputSize, outputSize, dropout, bufInput, bufWeight, bufBias, bufResult, activation);
+        forward(inputSize, outputSize, bufDropout, bufInput, bufWeight, bufBias, bufResult, activation);
 
         OpenCL.getQueue().putReadBuffer(bufResult, true);
         bufResult.getBuffer().get(result);
 
         bufInput.release();
         bufResult.release();
+        bufDropout.release();
 
     }
-    public void forward(int inputSize, int outputSize, int[] dropout,
+    public void forward(int inputSize, int outputSize, CLBuffer<IntBuffer> bufDropout,
            CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufWeight,
            CLBuffer<FloatBuffer> bufBias, CLBuffer<FloatBuffer> bufResult,
            ActivationFunction activation){
@@ -73,10 +76,6 @@ public class FullyForwardCL {
             progActivation = OpenCL.compile("activation.cl");
             actKernels = progActivation.createCLKernels();
         }
-
-        CLBuffer<IntBuffer> bufDropout = OpenCL.createReadBuffer(dropout);
-        OpenCL.getQueue()
-                .putWriteBuffer(bufDropout, false);
 
         forwardKernel.rewind()
                 .putArg(inputSize)
@@ -90,20 +89,7 @@ public class FullyForwardCL {
         OpenCL.execute(forwardKernel, outputSize);
 
         if(activation instanceof SoftMaxFunction){
-            CLBuffer<FloatBuffer> bufExped = OpenCL.createReadWriteBuffer(outputSize);
-            CLKernel kernelActPre = actKernels.get("softmax_before");
-            kernelActPre.rewind()
-                    .putArg(bufResult)
-                    .putArg(bufExped);
-            OpenCL.execute(kernelActPre, outputSize);
-
-            CLKernel kernelAct = actKernels.get("softmax");
-            kernelAct.rewind()
-                    .putArg(bufExped)
-                    .putArg(bufResult);
-            OpenCL.execute(kernelAct, outputSize);
-
-            bufExped.release();
+            softmax(outputSize, bufResult);
 
         }else{
             CLKernel kernelAct = actKernels.get(activation.getName());
@@ -112,7 +98,22 @@ public class FullyForwardCL {
             OpenCL.execute(kernelAct, outputSize);
         }
 
-        bufDropout.release();
+    }
 
+    private void softmax(int outputSize, CLBuffer<FloatBuffer> bufResult) {
+        CLBuffer<FloatBuffer> bufExped = OpenCL.createReadWriteBuffer(outputSize);
+        CLKernel kernelActPre = actKernels.get("softmax_before");
+        kernelActPre.rewind()
+                .putArg(bufResult)
+                .putArg(bufExped);
+        OpenCL.execute(kernelActPre, outputSize);
+
+        CLKernel kernelAct = actKernels.get("softmax");
+        kernelAct.rewind()
+                .putArg(bufExped)
+                .putArg(bufResult);
+        OpenCL.execute(kernelAct, outputSize);
+
+        bufExped.release();
     }
 }

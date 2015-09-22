@@ -6,24 +6,31 @@
 package kishida.cnn.layers;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jogamp.opencl.CLBuffer;
+import java.nio.FloatBuffer;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import kishida.cnn.opencl.MaxPoolingCL;
+import kishida.cnn.opencl.OpenCL;
 import lombok.Getter;
 
 /**
  *
  * @author naoki
  */
-public class MaxPoolingLayer extends ImageNeuralLayer {
+public class MaxPoolingLayer extends ImageNeuralLayer implements FullGpuEnabled {
     @Getter
     int size;
     @Getter
     int stride;
     float[] newDelta;
+    @JsonIgnore
+    @Getter
+    CLBuffer<FloatBuffer> bufResult;
 
     @JsonCreator
     public MaxPoolingLayer(
@@ -43,6 +50,16 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
         outputHeight = inputHeight / stride;
         result = new float[outputChannels * outputWidth * outputHeight];
         newDelta = new float[inputChannels * inputWidth * inputHeight];
+        bufResult = OpenCL.createReadWriteBuffer(result.length);
+    }
+
+    @Override
+    public float[] getResult() {
+        if(bufResult != null){
+            OpenCL.getQueue().putReadBuffer(bufResult, true);
+            bufResult.getBuffer().get(result).rewind();
+        }
+        return result;
     }
 
     /** プーリング(max) */
@@ -78,6 +95,13 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
             });
         }
         return result;
+    }
+
+    @Override
+    public void forward(CLBuffer<FloatBuffer> input) {
+        MaxPoolingCL.INSTANCE.forward(inputChannels, inputWidth, inputHeight,
+                outputWidth, outputHeight, size, stride,
+                input, bufResult);
     }
 
     @Override

@@ -26,16 +26,29 @@ public class MaxPoolingCL {
 
     public void forward(int inputChannel, int inputWidth, int inputHeight, int outputWidth, int ouptutHeight,
             int size, int stride, float[] input, float[] result){
+        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
+        CLBuffer<FloatBuffer> bufResult = OpenCL.createWriteBuffer(result.length);
+        OpenCL.getQueue()
+                .putWriteBuffer(bufInput, false);
+
+        forward(inputChannel, inputWidth, inputHeight,
+                outputWidth, ouptutHeight, size, stride, bufInput, bufResult);
+
+        OpenCL.getQueue().putReadBuffer(bufResult, true);
+        bufResult.getBuffer().get(result);
+
+        bufInput.release();
+        bufResult.release();
+
+    }
+    public void forward(int inputChannel, int inputWidth, int inputHeight, int outputWidth, int ouptutHeight,
+            int size, int stride, CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufResult){
+
         if(prog == null){
             prog = OpenCL.compile("maxpooling.cl");
             kernels = prog.createCLKernels();
         }
 
-        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
-        CLBuffer<FloatBuffer> bufResult = OpenCL.createWriteBuffer(result.length);
-
-        OpenCL.getQueue()
-                .putWriteBuffer(bufInput, false);
         CLKernel kernelForward = kernels.get("forward");
         kernelForward.rewind()
                 .putArg(inputWidth)
@@ -49,11 +62,6 @@ public class MaxPoolingCL {
                     bufResult);
         OpenCL.execute(kernelForward,
                 inputChannel * outputWidth * ouptutHeight);
-        OpenCL.getQueue().putReadBuffer(bufResult, true);
-        bufResult.getBuffer().get(result);
-
-        bufInput.release();
-        bufResult.release();
     }
 
     public void backword(int inputChannel, int inputWidth, int inputHeight,

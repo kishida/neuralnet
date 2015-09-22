@@ -7,6 +7,7 @@ package kishida.cnn.layers;
 
 import com.amd.aparapi.Kernel;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jogamp.opencl.CLBuffer;
@@ -29,7 +30,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /** 畳み込み層 */
-public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
+public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, FullGpuEnabled{
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     float[] filter;
@@ -56,6 +57,10 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     CLBuffer<FloatBuffer> bufBias;
     CLBuffer<FloatBuffer> bufFilterDelta;
     CLBuffer<FloatBuffer> bufBiasDelta;
+
+    @JsonIgnore
+    @Getter
+    CLBuffer<FloatBuffer> bufResult;
 
     public ConvolutionLayer(String name,
             int filterCount, int size, int stride, float initBias, boolean useGpu) {
@@ -120,8 +125,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         if(true){
             this.bufFilter = OpenCL.createReadWriteBuffer(filter);
             this.bufBias = OpenCL.createReadWriteBuffer(bias);
-            this.bufFilterDelta = OpenCL.createReadWriteBuffer(filter.length);
-            this.bufBiasDelta = OpenCL.createReadWriteBuffer(bias.length);
+            this.bufFilterDelta = OpenCL.createReadWriteBuffer(filterDelta);
+            this.bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
+            this.bufResult = OpenCL.createReadWriteBuffer(result.length);
             OpenCL.getQueue()
                     .putWriteBuffer(bufFilter, false)
                     .putWriteBuffer(bufBias, false)
@@ -162,6 +168,15 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         return biasDelta;
     }
 
+    @Override
+    public float[] getResult() {
+        if(bufResult != null){
+            OpenCL.getQueue().putReadBuffer(bufResult, true);
+            bufResult.getBuffer().get(result).rewind();
+        }
+        return result;
+    }
+
     /** 畳み込みフィルタを適用する */
     @Override
     public float[] forward(float[] img) {
@@ -192,6 +207,14 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     outputChannels, outputWidth, outputHeight, false);
         }
         return result;
+    }
+
+    @Override
+    public void forward(CLBuffer<FloatBuffer> input) {
+        ConvolutionForwardCL.INSTANCE.forward(input,
+                inputChannels, inputWidth, inputHeight,
+                bufFilter, outputChannels, outputWidth, outputHeight,
+                bufResult, filterSize, stride, bufBias);
     }
 
     /** 畳み込み層の学習 */

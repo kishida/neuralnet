@@ -6,13 +6,21 @@
 package kishida.cnn.layers;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jogamp.opencl.CLBuffer;
+import java.nio.FloatBuffer;
+import kishida.cnn.opencl.OpenCL;
+import lombok.Getter;
 
 /**
  *
  * @author naoki
  */
-public class InputLayer extends ImageNeuralLayer {
+public class InputLayer extends ImageNeuralLayer implements FullGpuEnabled {
+    @JsonIgnore
+    @Getter
+    CLBuffer<FloatBuffer> bufResult;
 
     public InputLayer(int width, int height) {
         this("input", width, height);
@@ -24,6 +32,7 @@ public class InputLayer extends ImageNeuralLayer {
             @JsonProperty("width") int width,
             @JsonProperty("height") int height) {
         super("input", 0, 0, 0, 3, width, height);
+        bufResult = OpenCL.createWriteBuffer(outputChannels * outputWidth * outputHeight);
     }
 
     @Override
@@ -40,9 +49,22 @@ public class InputLayer extends ImageNeuralLayer {
     }
 
     @Override
+    public boolean isUseGpu() {
+        return false;
+    }
+
+    @Override
     public float[] forward(float[] in) {
         this.result = in;
+        bufResult.getBuffer().put(result);
+        OpenCL.getQueue()
+                .putWriteBuffer(bufResult, false);
         return result;
+    }
+
+    @Override
+    public void forward(CLBuffer<FloatBuffer> input) {
+        // do nothing
     }
 
     @Override
@@ -53,6 +75,9 @@ public class InputLayer extends ImageNeuralLayer {
 
     public void setInput(float[] input){
         result = input;
+        bufResult.getBuffer().put(result).rewind();
+        OpenCL.getQueue()
+                .putWriteBuffer(bufResult, false);
     }
 
     @Override

@@ -24,17 +24,31 @@ public class MultiNormalizeCL {
     public void normalize(int inputChannels, int inputWidth, int inputHeight,
             int size, float threshold,
             float[] input, float[] result){
+        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
+        CLBuffer<FloatBuffer> bufResult = OpenCL.createWriteBuffer(result.length);
+        OpenCL.getQueue().putWriteBuffer(bufInput, false);
+
+        OpenCL.getQueue().putReadBuffer(bufResult, true);
+        bufResult.getBuffer().get(result);
+
+        normalize(inputChannels, inputWidth, inputHeight, size, threshold,
+                bufInput, bufResult);
+
+        bufInput.release();
+        bufResult.release();
+
+    }
+    public void normalize(int inputChannels, int inputWidth, int inputHeight,
+            int size, float threshold,
+            CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufResult){
         if(prog == null){
             prog = OpenCL.compile("multi_normalize.cl");
             kernels = prog.createCLKernels();
         }
 
-        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
         CLBuffer<FloatBuffer> bufAverages = OpenCL.createReadWriteBuffer(inputWidth * inputHeight);
         CLBuffer<FloatBuffer> bufStds = OpenCL.createReadWriteBuffer(inputWidth * inputHeight);
-        CLBuffer<FloatBuffer> bufResult = OpenCL.createWriteBuffer(result.length);
 
-        OpenCL.getQueue().putWriteBuffer(bufInput, false);
         CLKernel kernelAverage = kernels.get("average");
         kernelAverage.rewind()
                 .putArg(inputChannels)
@@ -60,14 +74,8 @@ public class MultiNormalizeCL {
                         bufResult);
         OpenCL.execute(kernelForward, inputChannels * inputWidth * inputHeight);
 
-        OpenCL.getQueue().putReadBuffer(bufResult, true);
-
-        bufResult.getBuffer().get(result);
-
-        bufInput.release();
         bufAverages.release();
         bufStds.release();
-        bufResult.release();
 
     }
 

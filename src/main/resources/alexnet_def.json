@@ -113,7 +113,7 @@
       "initBias" : 1.0,
       "dropoutRate" : 1.0,
       "activation" : "SoftMaxFunction",
-      "useGpu" : false
+      "useGpu" : true
     }
   } ]
 }

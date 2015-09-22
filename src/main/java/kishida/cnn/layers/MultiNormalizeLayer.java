@@ -6,22 +6,29 @@
 package kishida.cnn.layers;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jogamp.opencl.CLBuffer;
+import java.nio.FloatBuffer;
 import java.util.stream.IntStream;
 import kishida.cnn.opencl.MultiNormalizeCL;
+import kishida.cnn.opencl.OpenCL;
 import lombok.Getter;
 
 /**
  *
  * @author naoki
  */
-public class MultiNormalizeLayer extends ImageNeuralLayer{
+public class MultiNormalizeLayer extends ImageNeuralLayer implements FullGpuEnabled{
     @Getter
     int size;
     @Getter
     float threshold;
     @Getter
     boolean useGpu;
+    @JsonIgnore
+    @Getter
+    CLBuffer<FloatBuffer> bufResult;
 
     @JsonCreator
     public MultiNormalizeLayer(
@@ -42,6 +49,16 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
         outputWidth = inputWidth;
         outputHeight = inputHeight;
         result = new float[inputChannels * inputHeight * inputWidth];
+        bufResult = OpenCL.createReadWriteBuffer(result.length);
+    }
+
+    @Override
+    public float[] getResult() {
+        if(bufResult != null){
+            OpenCL.getQueue().putReadBuffer(bufResult, true);
+            bufResult.getBuffer().get(result).rewind();
+        }
+        return result;
     }
 
     @Override
@@ -97,6 +114,12 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
             });
         }
         return result;
+    }
+
+    @Override
+    public void forward(CLBuffer<FloatBuffer> input) {
+        MultiNormalizeCL.INSTANCE.normalize(inputChannels, inputWidth, inputHeight, size,
+                threshold, input, bufResult);
     }
 
     @Override

@@ -46,9 +46,14 @@ public abstract class NeuralLayer {
         this.name = name;
     }
 
-    public float[] forward() {
+    public void forward() {
         Objects.requireNonNull(preLayer, "preLayer is null on " + name);
-        return forward(preLayer.result);
+        if(this instanceof FullGpuEnabled && preLayer instanceof FullGpuEnabled &&
+                ((FullGpuEnabled)this).isUseGpu()){
+            ((FullGpuEnabled)this).forward(((FullGpuEnabled)preLayer).getBufResult());
+        }else{
+            forward(preLayer.getResult());
+        }
     }
 
     public float[] backward(float[] delta) {

@@ -17,28 +17,72 @@ import java.nio.FloatBuffer;
 public class ConvolutionForwardCL {
     public static ConvolutionForwardCL INSTANCE = new ConvolutionForwardCL();
     CLProgram prog;
+    CLKernel forwardKernel;
+    CLKernel normalizeKernel;
+
     private ConvolutionForwardCL() {
     }
 
-    public float[] forward(float[] input, int inputChannels, int inputWidth, int inputHeight,
+    /**
+     * バッファを外部にもたない
+     */
+    public void forward(float[] input, int inputChannels, int inputWidth, int inputHeight,
             float[] filter, int outputChannels, int outputWidth, int outputHeight, float[] result,
             int filterSize, int stride, float[] bias){
-        if(prog == null){
-            prog = OpenCL.compile("convolution_forward.cl");
-        }
 
-        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
         CLBuffer<FloatBuffer> bufFilter = OpenCL.createReadBuffer(filter);
-        CLBuffer<FloatBuffer> bufResult = OpenCL.createReadWriteBuffer(result);
         CLBuffer<FloatBuffer> bufBias = OpenCL.createReadBuffer(bias);
 
         OpenCL.getQueue()
-                .putWriteBuffer(bufInput, false)
                 .putWriteBuffer(bufFilter, false)
                 .putWriteBuffer(bufBias, false);
 
-        CLKernel forwardKernel = prog.createCLKernel("forward");
+        forward(input, inputChannels, inputWidth, inputHeight,
+                bufFilter, outputChannels, outputWidth, outputHeight, result,
+                filterSize, stride, bufBias);
+
+        bufBias.release();
+        bufFilter.release();
+    }
+
+    /**
+     * filterとbiasは外部管理
+     */
+    public void forward(float[] input,
+        int inputChannels, int inputWidth, int inputHeight,
+        CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
+        float[] result,
+        int filterSize, int stride, CLBuffer<FloatBuffer> bufBias){
+
+        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
+        CLBuffer<FloatBuffer> bufResult = OpenCL.createReadWriteBuffer(result);
+        OpenCL.getQueue()
+                .putWriteBuffer(bufInput, false);
+
+        forward(bufInput, inputChannels, inputWidth, inputHeight,
+                bufFilter, outputChannels, outputWidth, outputHeight, bufResult,
+                filterSize, stride, bufBias);
+
+        OpenCL.getQueue()
+                .putReadBuffer(bufResult, true);
+        bufResult.getBuffer().get(result);
+
+        bufResult.release();
+        bufInput.release();
+
+    }
+    public void forward(CLBuffer<FloatBuffer> bufInput,
+            int inputChannels, int inputWidth, int inputHeight,
+            CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
+            CLBuffer<FloatBuffer> bufResult,
+            int filterSize, int stride, CLBuffer<FloatBuffer> bufBias){
+        if(prog == null){
+            prog = OpenCL.compile("convolution_forward.cl");
+            forwardKernel = prog.createCLKernel("forward");
+        }
+
         forwardKernel
+                .rewind()
                 .putArg(outputHeight)
                 .putArg(outputWidth)
                 .putArg(inputChannels)
@@ -53,28 +97,17 @@ public class ConvolutionForwardCL {
                         bufBias);
         OpenCL.execute(forwardKernel,
                 outputChannels * outputWidth * outputHeight);
-        forwardKernel.release();
 
-        CLKernel normalizeKernel = prog.createCLKernel("localNormalize");
+        normalizeKernel = prog.createCLKernel("localNormalize");
         normalizeKernel
+                .rewind()
                 .putArg(outputWidth)
                 .putArg(outputHeight)
                 .putArg(outputChannels)
                 .putArg(bufResult);
         OpenCL.execute(normalizeKernel,
                 outputChannels * outputWidth * outputHeight);
-        normalizeKernel.release();
 
-        OpenCL.getQueue()
-                .putReadBuffer(bufResult, true);
-        bufResult.getBuffer().get(result);
-
-        bufBias.release();
-        bufResult.release();
-        bufInput.release();
-        bufFilter.release();
-
-        return result;
     }
 
 }

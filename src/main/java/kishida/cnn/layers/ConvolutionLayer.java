@@ -9,7 +9,8 @@ import com.amd.aparapi.Kernel;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Arrays;
+import com.jogamp.opencl.CLBuffer;
+import java.nio.FloatBuffer;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
@@ -22,6 +23,7 @@ import kishida.cnn.kernels.ConvolutionForwardKernel;
 import kishida.cnn.kernels.ConvolutionLocalNormalizationKernel;
 import kishida.cnn.opencl.ConvolutionBackwordCL;
 import kishida.cnn.opencl.ConvolutionForwardCL;
+import kishida.cnn.opencl.OpenCL;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -30,10 +32,9 @@ import lombok.Setter;
 public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     float[] filter;
+
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     float[] bias;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
@@ -52,6 +53,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     float initBias;
     float[] tempDelta;
     float[] newDelta;
+
+    CLBuffer<FloatBuffer> bufFilter;
+    CLBuffer<FloatBuffer> bufBias;
 
     public ConvolutionLayer(String name,
             int filterCount, int size, int stride, float initBias, boolean useGpu) {
@@ -112,6 +116,30 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         this.result = new float[outputChannels * outputWidth * outputHeight];
         this.tempDelta = new float[result.length];
         this.newDelta = new float[inputChannels * inputWidth * inputHeight];
+
+        if(true){
+            this.bufBias = OpenCL.createReadBuffer(bias);
+            this.bufFilter = OpenCL.createReadBuffer(filter);
+            OpenCL.getQueue()
+                    .putWriteBuffer(bufFilter, false)
+                    .putWriteBuffer(bufBias, false);
+        }
+    }
+
+    public float[] getFilter() {
+        if(bufFilter != null){
+            OpenCL.getQueue().putReadBuffer(bufFilter, true);
+            bufFilter.getBuffer().get(filter).rewind();
+        }
+        return filter;
+    }
+
+    public float[] getBias() {
+        if(bufBias != null){
+            OpenCL.getQueue().putReadBuffer(bufBias, true);
+            bufBias.getBuffer().get(bias).rewind();
+        }
+        return bias;
     }
 
     /** 畳み込みフィルタを適用する */
@@ -127,8 +155,13 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                         outputChannels, outputWidth, outputHeight, false);
             } else{
                 // JOCL
-                result = ConvolutionForwardCL.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
-                        filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias);
+                if(true){
+                    ConvolutionForwardCL.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
+                            bufFilter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bufBias);
+                } else {
+                    ConvolutionForwardCL.INSTANCE.forward(img, inputChannels, inputWidth, inputHeight,
+                            filter, outputChannels, outputWidth, outputHeight, result, filterSize, stride, bias);
+                }
             }
         }else {
             //CPU
@@ -139,33 +172,6 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     outputChannels, outputWidth, outputHeight, false);
         }
         return result;
-    }
-
-    private void localNormalization(float[] result){
-        final int n = 5;
-        final int k = 2;
-        final float a = 0.0001f;
-        final float b = 0.75f;
-        // resultをコピーするほうが楽だけど、メモリを節約するため
-        final float[] sigma = new float[n];
-        for(int x = 0; x < outputWidth; ++x){
-            for(int y = 0; y < outputHeight; ++y){
-                int xy = x * outputHeight + y;
-                Arrays.fill(sigma, 0);
-                int lp = 0;
-                for(; lp < n / 2; ++lp){
-                    sigma[lp] = result[lp * outputWidth * outputHeight + xy] * result[lp * outputWidth * outputHeight + xy];
-                }
-                for(int ch = 0; ch < outputChannels; ++ch){
-                    sigma[lp % 5] = lp >= outputChannels ? 0 :
-                            result[lp * outputWidth * outputHeight + xy] * result[lp * outputWidth * outputHeight + xy];
-                    lp = lp + 1;
-                    float sum = FloatUtil.floatSum(sigma);
-                    result[ch * outputWidth * outputHeight + xy] = result[ch * outputWidth * outputHeight + xy] /
-                            (float)Math.pow(k + a * sum, b);
-                }
-            }
-        }
     }
 
     /** 畳み込み層の学習 */
@@ -195,15 +201,23 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                     System.out.println("filter" + ConvolutionBackwordFilterKernel.INSTANCE.getExecutionMode());
                     System.out.println("bias" + ConvolutionBackwordBiasKernel.INSTANCE.getExecutionMode());
                 }
-                return newDelta;
             }else{
                 // JOCL
-                return ConvolutionBackwordCL.INSTANCE.backward(
-                        delta, result, input,
-                        inputChannels, inputWidth, inputHeight,
-                        filter, outputChannels, outputWidth, outputHeight,
-                        filterDelta, biasDelta, filterSize, stride, newDelta, parent.getLearningRate());
+                if(true){
+                    ConvolutionBackwordCL.INSTANCE.backward(
+                            delta, result, input,
+                            inputChannels, inputWidth, inputHeight,
+                            bufFilter, outputChannels, outputWidth, outputHeight,
+                            filterDelta, biasDelta, filterSize, stride, newDelta, parent.getLearningRate());
+                }else{
+                    ConvolutionBackwordCL.INSTANCE.backward(
+                            delta, result, input,
+                            inputChannels, inputWidth, inputHeight,
+                            filter, outputChannels, outputWidth, outputHeight,
+                            filterDelta, biasDelta, filterSize, stride, newDelta, parent.getLearningRate());
+                }
             }
+            return newDelta;
         } else {
             // CPUバージョン
             return ConvolutionBackwordKernel.INSTANCE.backward(delta, result,
@@ -227,6 +241,13 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] +=  filterDelta[i] / count
                 - parent.getWeightDecay() * parent.getLearningRate() * filter[i]);
         IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i] / count);
+        if(bufFilter != null){
+            bufFilter.getBuffer().put(filter).rewind();
+            bufBias.getBuffer().put(bias).rewind();
+            OpenCL.getQueue()
+                    .putWriteBuffer(bufFilter, false)
+                    .putWriteBuffer(bufBias, false);
+        }
     }
 
     @Override

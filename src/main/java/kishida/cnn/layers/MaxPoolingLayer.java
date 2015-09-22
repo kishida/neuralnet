@@ -48,7 +48,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer {
     /** プーリング(max) */
     @Override
     public float[] forward(float[] data) {
-        if(true){
+        if(false){
             MaxPoolingCL.INSTANCE.forward(inputChannels, inputWidth, inputHeight,
                     outputWidth, outputHeight, size, stride, data, result);
         }else{

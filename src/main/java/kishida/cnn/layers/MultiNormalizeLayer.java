@@ -8,6 +8,7 @@ package kishida.cnn.layers;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.stream.IntStream;
+import kishida.cnn.opencl.MultiNormalizeCL;
 import lombok.Getter;
 
 /**
@@ -45,52 +46,56 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
 
     @Override
     public float[] forward(float[] in) {
-        IntStream.range(0, inputWidth).parallel().forEach(x -> {
-            for(int y = 0; y < inputHeight; ++y){
-                float total = 0;
-                int count = 0;
-                for(int i = 0; i < size; ++i){
-                    int xx = x + i - size / 2;
-                    if(xx < 0 || xx >= inputWidth){
-                        continue;
-                    }
-                    for(int j = 0; j < size; ++j){
-                        int yy = y + j - size / 2;
-                        if(yy < 0 || yy >= inputHeight){
+        if(false){
+            MultiNormalizeCL.INSTANCE.normalize(inputChannels, inputWidth, inputHeight,
+                    size, threshold, in, result);
+        } else{
+            IntStream.range(0, inputWidth).parallel().forEach(x -> {
+                for(int y = 0; y < inputHeight; ++y){
+                    float total = 0;
+                    int count = 0;
+                    for(int i = 0; i < size; ++i){
+                        int xx = x + i - size / 2;
+                        if(xx < 0 || xx >= inputWidth){
                             continue;
                         }
-                        for(int ch = 0; ch < inputChannels; ++ch){
-                            total += in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
-                            ++count;
+                        for(int j = 0; j < size; ++j){
+                            int yy = y + j - size / 2;
+                            if(yy < 0 || yy >= inputHeight){
+                                continue;
+                            }
+                            for(int ch = 0; ch < inputChannels; ++ch){
+                                total += in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
+                                ++count;
+                            }
                         }
                     }
-                }
-                float average = total / count;
-                float variance = 0;
-                for(int i = 0; i < size; ++i){
-                    int xx = x + i - size / 2;
-                    if(xx < 0 || xx >= inputWidth){
-                        continue;
-                    }
-                    for(int j = 0; j < size; ++j){
-                        int yy = y + j - size / 2;
-                        if(yy < 0 || yy >= inputHeight){
+                    float average = total / count;
+                    float variance = 0;
+                    for(int i = 0; i < size; ++i){
+                        int xx = x + i - size / 2;
+                        if(xx < 0 || xx >= inputWidth){
                             continue;
                         }
-                        for(int ch = 0; ch < inputChannels; ++ch){
-                            float data = in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
-                            variance += (data - average) * (data - average);
+                        for(int j = 0; j < size; ++j){
+                            int yy = y + j - size / 2;
+                            if(yy < 0 || yy >= inputHeight){
+                                continue;
+                            }
+                            for(int ch = 0; ch < inputChannels; ++ch){
+                                float data = in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
+                                variance += (data - average) * (data - average);
+                            }
                         }
                     }
+                    float std = Math.max(threshold, (float)Math.sqrt(variance / count));
+                    for(int ch = 0; ch < inputChannels; ++ch){
+                        int pos = ch * inputHeight * inputWidth + x * inputHeight + y;
+                        result[pos] = (in[pos] - average) / std;
+                    }
                 }
-                float std = Math.max(threshold, (float)Math.sqrt(variance / count));
-                for(int ch = 0; ch < inputChannels; ++ch){
-                    int pos = ch * inputHeight * inputWidth + x * inputHeight + y;
-                    result[pos] = (in[pos] - average) / std;
-                }
-            }
-        });
-
+            });
+        }
         return result;
     }
 

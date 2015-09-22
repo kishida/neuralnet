@@ -29,36 +29,42 @@ public class ConvolutionBackwordCL {
             float[] filterDelta, float[] biasDelta,
             int filterSize, int stride, float[] newDelta, float learningRate) {
         CLBuffer<FloatBuffer> bufFilter = OpenCL.createReadBuffer(filter);
+        CLBuffer<FloatBuffer> bufFilterDelta = OpenCL.createReadWriteBuffer(filterDelta);
+        CLBuffer<FloatBuffer> bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
+        OpenCL.getQueue()
+                .putWriteBuffer(bufFilter, false)
+                .putWriteBuffer(bufFilterDelta, false)
+                .putWriteBuffer(bufBiasDelta, false);
 
         backward(delta, result,
                 input, inputChannels, inputWidth, inputHeight,
                 bufFilter, outputChannels, outputWidth, outputHeight,
-                filterDelta, biasDelta,
+                bufFilterDelta, bufBiasDelta,
                 filterSize, stride, newDelta, learningRate);
 
         OpenCL.getQueue()
-                .putWriteBuffer(bufFilter, false);
+                .putReadBuffer(bufBiasDelta, true)
+                .putReadBuffer(bufFilterDelta, true);
+        bufFilterDelta.getBuffer().get(filterDelta);
+        bufBiasDelta.getBuffer().get(biasDelta);
 
         bufFilter.release();
+        bufFilterDelta.release();
+        bufBiasDelta.release();
     }
     public void backward(float[] delta, float[] result,
             float[] input, int inputChannels, int inputWidth, int inputHeight,
             CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
-            float[] filterDelta, float[] biasDelta,
+            CLBuffer<FloatBuffer> bufFilterDelta, CLBuffer<FloatBuffer> bufBiasDelta,
             int filterSize, int stride, float[] newDelta, float learningRate) {
         CLBuffer<FloatBuffer> bufDelta = OpenCL.createReadBuffer(delta);
         CLBuffer<FloatBuffer> bufResult = OpenCL.createReadBuffer(result);
         CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
-        CLBuffer<FloatBuffer> bufFilterDelta = OpenCL.createReadWriteBuffer(filterDelta);
-        CLBuffer<FloatBuffer> bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
         CLBuffer<FloatBuffer> bufNewDelta = OpenCL.createWriteBuffer(newDelta.length);
         OpenCL.getQueue()
                 .putWriteBuffer(bufDelta, false)
-                .putWriteBuffer(bufFilter, false)
                 .putWriteBuffer(bufResult, false)
-                .putWriteBuffer(bufInput, false)
-                .putWriteBuffer(bufFilterDelta, false)
-                .putWriteBuffer(bufBiasDelta, false);
+                .putWriteBuffer(bufInput, false);
 
         backward(bufDelta, bufResult,
                 bufInput, inputChannels, inputWidth, inputHeight,
@@ -67,18 +73,12 @@ public class ConvolutionBackwordCL {
                 filterSize, stride, bufNewDelta, learningRate);
 
         OpenCL.getQueue()
-                .putReadBuffer(bufBiasDelta, true)
-                .putReadBuffer(bufFilterDelta, true)
                 .putReadBuffer(bufNewDelta, true);
         bufNewDelta.getBuffer().get(newDelta);
-        bufFilterDelta.getBuffer().get(filterDelta);
-        bufBiasDelta.getBuffer().get(biasDelta);
 
         bufDelta.release();
         bufResult.release();
         bufInput.release();
-        bufFilterDelta.release();
-        bufBiasDelta.release();
         bufNewDelta.release();
     }
     public void backward(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
@@ -154,6 +154,46 @@ public class ConvolutionBackwordCL {
         OpenCL.execute(biasAfterKernel, outputChannels);
 
         bufTempBias.release();
+
+    }
+
+    public void prepare(float momentam,
+            int filterCount, int biasCount,
+            CLBuffer<FloatBuffer> bufFilterDelta,
+            CLBuffer<FloatBuffer> bufBiasDelta){
+
+        CLKernel kernel = kernels.get("prepare");
+        kernel.rewind()
+                .putArg(momentam)
+                .putArg(bufFilterDelta);
+        OpenCL.execute(kernel, filterCount);
+        kernel.rewind()
+                .putArg(momentam)
+                .putArg(bufBiasDelta);
+        OpenCL.execute(kernel, biasCount);
+    }
+
+    public void join(float weightDecay, float learningRate,
+            int filterCount, int biasCount, int count,
+            CLBuffer<FloatBuffer> bufFilter, CLBuffer<FloatBuffer> bufFilterDelta,
+            CLBuffer<FloatBuffer> bufBias, CLBuffer<FloatBuffer> bufBiasDelta){
+        CLKernel kernelFilter = kernels.get("joinFilter");
+        kernelFilter.rewind()
+                .putArg(weightDecay)
+                .putArg(learningRate)
+                .putArg(count)
+                .putArgs(
+                    bufFilter,
+                    bufFilterDelta);
+        OpenCL.execute(kernelFilter, filterCount);
+
+        CLKernel kernelBias = kernels.get("joinBias");
+        kernelBias.rewind()
+                .putArg(count)
+                .putArgs(
+                        bufBias,
+                        bufBiasDelta);
+        OpenCL.execute(kernelBias, biasCount);
 
     }
 

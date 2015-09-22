@@ -37,10 +37,8 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
     @JsonInclude(JsonInclude.Include.NON_NULL)
     float[] bias;
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     float[] filterDelta;
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     float[] biasDelta;
     @Getter
     int stride;
@@ -56,6 +54,8 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
 
     CLBuffer<FloatBuffer> bufFilter;
     CLBuffer<FloatBuffer> bufBias;
+    CLBuffer<FloatBuffer> bufFilterDelta;
+    CLBuffer<FloatBuffer> bufBiasDelta;
 
     public ConvolutionLayer(String name,
             int filterCount, int size, int stride, float initBias, boolean useGpu) {
@@ -118,11 +118,15 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
         this.newDelta = new float[inputChannels * inputWidth * inputHeight];
 
         if(true){
-            this.bufBias = OpenCL.createReadBuffer(bias);
-            this.bufFilter = OpenCL.createReadBuffer(filter);
+            this.bufFilter = OpenCL.createReadWriteBuffer(filter);
+            this.bufBias = OpenCL.createReadWriteBuffer(bias);
+            this.bufFilterDelta = OpenCL.createReadWriteBuffer(filter.length);
+            this.bufBiasDelta = OpenCL.createReadWriteBuffer(bias.length);
             OpenCL.getQueue()
                     .putWriteBuffer(bufFilter, false)
-                    .putWriteBuffer(bufBias, false);
+                    .putWriteBuffer(bufBias, false)
+                    .putWriteBuffer(bufFilterDelta, false)
+                    .putWriteBuffer(bufBiasDelta, false);
         }
     }
 
@@ -140,6 +144,22 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
             bufBias.getBuffer().get(bias).rewind();
         }
         return bias;
+    }
+
+    public float[] getFilterDelta() {
+        if(bufFilterDelta != null){
+            OpenCL.getQueue().putReadBuffer(bufFilterDelta, true);
+            bufFilterDelta.getBuffer().get(filterDelta).rewind();
+        }
+        return filterDelta;
+    }
+
+    public float[] getBiasDelta() {
+        if(bufBiasDelta != null){
+            OpenCL.getQueue().putReadBuffer(bufBiasDelta, true);
+            bufBiasDelta.getBuffer().get(biasDelta).rewind();
+        }
+        return biasDelta;
     }
 
     /** 畳み込みフィルタを適用する */
@@ -208,7 +228,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
                             delta, result, input,
                             inputChannels, inputWidth, inputHeight,
                             bufFilter, outputChannels, outputWidth, outputHeight,
-                            filterDelta, biasDelta, filterSize, stride, newDelta, parent.getLearningRate());
+                            bufFilterDelta, bufBiasDelta, filterSize, stride, newDelta, parent.getLearningRate());
                 }else{
                     ConvolutionBackwordCL.INSTANCE.backward(
                             delta, result, input,
@@ -230,23 +250,38 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer{
 
     @Override
     public void prepareBatch() {
-        float momentam = parent.getMomentam();
-        IntStream.range(0, filterDelta.length).parallel().forEach(i -> filterDelta[i] = filterDelta[i] * momentam);
-        IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
+        if(useGpu){
+            ConvolutionBackwordCL.INSTANCE.prepare(parent.getMomentam(),
+                    filterDelta.length, biasDelta.length, bufFilterDelta, bufBiasDelta);
+        }else{
+            float momentam = parent.getMomentam();
+            IntStream.range(0, filterDelta.length).parallel().forEach(i -> filterDelta[i] = filterDelta[i] * momentam);
+            IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
+        }
     }
 
     @Override
     public void joinBatch() {
-        float count = parent.getMiniBatch();
-        IntStream.range(0, filter.length).parallel().forEach(i -> filter[i] +=  filterDelta[i] / count
-                - parent.getWeightDecay() * parent.getLearningRate() * filter[i]);
-        IntStream.range(0, bias.length).parallel().forEach(i -> bias[i] += biasDelta[i] / count);
-        if(bufFilter != null){
+        if(useGpu){
+            ConvolutionBackwordCL.INSTANCE.join(
+                    parent.getWeightDecay(), parent.getLearningRate(),
+                    filter.length, bias.length,
+                    parent.getMiniBatch(),
+                    bufFilter, bufFilterDelta, bufBias, bufBiasDelta);
+            /*
             bufFilter.getBuffer().put(filter).rewind();
             bufBias.getBuffer().put(bias).rewind();
             OpenCL.getQueue()
                     .putWriteBuffer(bufFilter, false)
                     .putWriteBuffer(bufBias, false);
+                    */
+        }else{
+            float count = parent.getMiniBatch();
+            IntStream.range(0, filter.length).parallel().forEach(
+                    i -> filter[i] +=  filterDelta[i] / count
+                    - parent.getWeightDecay() * parent.getLearningRate() * filter[i]);
+            IntStream.range(0, bias.length).parallel().forEach(
+                    i -> bias[i] += biasDelta[i] / count);
         }
     }
 

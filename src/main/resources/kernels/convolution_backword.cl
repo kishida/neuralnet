@@ -116,3 +116,46 @@ __kernel void biasAfter(
     }
     biasDelta[f] += b;
 }
+
+__kernel void prepare(
+    float momentam,
+    __global float* delta,
+    int count
+){
+    int f = get_global_id(0);
+    if(f >= count){
+        return;
+    }
+    delta[f] *= momentam;
+}
+
+__kernel void joinFilter(
+    float weightDecay,
+    float learningRate,
+    int count,
+    __global float* filter,
+    __global const float* filterDelta,
+    int len
+){
+    int f = get_global_id(0);
+    if(f >= len){
+        return;
+    }
+    filter[f] += filterDelta[f] / count
+        - weightDecay * learningRate * filter[f];
+}
+
+__kernel void joinBias(
+    int count,
+    __global float* bias,
+    __global const float* biasDelta,
+    int len
+){
+    int f = get_global_id(0);
+    if(f >= len){
+        return;
+    }
+    bias[f] += biasDelta[f] / count;
+}
+
+

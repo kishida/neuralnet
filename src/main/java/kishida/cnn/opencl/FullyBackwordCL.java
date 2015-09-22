@@ -35,36 +35,44 @@ public class FullyBackwordCL {
             float[] newDelta,
             float learningRate, ActivationFunction activation){
         CLBuffer<FloatBuffer> bufWeight      = OpenCL.createReadBuffer(weight);
+        CLBuffer<FloatBuffer> bufWeightDelta = OpenCL.createReadWriteBuffer(weightDelta);
+        CLBuffer<FloatBuffer> bufBiasDelta   = OpenCL.createReadWriteBuffer(biasDelta);
         OpenCL.getQueue()
+            .putWriteBuffer(bufWeightDelta ,false)
+            .putWriteBuffer(bufBiasDelta   ,false)
             .putWriteBuffer(bufWeight      ,false);
 
         backword(inputSize, outputSize,
                 dropout, input, delta,
-                result, bufWeight, weightDelta, biasDelta,
+                result, bufWeight, bufWeightDelta, bufBiasDelta,
                 newDelta,
                 learningRate, activation);
 
+        OpenCL.getQueue()
+            .putReadBuffer(bufBiasDelta   ,false)
+            .putReadBuffer(bufWeightDelta ,true);
+        bufBiasDelta.getBuffer().get(biasDelta);
+        bufWeightDelta.getBuffer().get(weightDelta);
+
         bufWeight      .release();
+        bufWeightDelta .release();
+        bufBiasDelta   .release();
     }
 
     public void backword(int inputSize, int outputSize,
             int[] dropout, float[] input, float[] delta,
             float[] result, CLBuffer<FloatBuffer> bufWeight,
-            float[] weightDelta, float[] biasDelta,
+            CLBuffer<FloatBuffer> bufWeightDelta, CLBuffer<FloatBuffer> bufBiasDelta,
             float[] newDelta,
             float learningRate, ActivationFunction activation){
         CLBuffer<FloatBuffer> bufInput       = OpenCL.createReadBuffer(input);
         CLBuffer<FloatBuffer> bufDelta       = OpenCL.createReadBuffer(delta);
         CLBuffer<FloatBuffer> bufResult      = OpenCL.createReadBuffer(result);
         CLBuffer<FloatBuffer> bufNewDelta    = OpenCL.createWriteBuffer(newDelta.length);
-        CLBuffer<FloatBuffer> bufWeightDelta = OpenCL.createReadWriteBuffer(weightDelta);
-        CLBuffer<FloatBuffer> bufBiasDelta   = OpenCL.createReadWriteBuffer(biasDelta);
         OpenCL.getQueue()
             .putWriteBuffer(bufInput       ,false)
             .putWriteBuffer(bufDelta       ,false)
-            .putWriteBuffer(bufResult      ,false)
-            .putWriteBuffer(bufWeightDelta ,false)
-            .putWriteBuffer(bufBiasDelta   ,false);
+            .putWriteBuffer(bufResult      ,false);
 
         backword(inputSize, outputSize,
                 dropout, bufInput, bufDelta,
@@ -73,19 +81,13 @@ public class FullyBackwordCL {
                 learningRate, activation);
 
         OpenCL.getQueue()
-            .putReadBuffer(bufNewDelta    ,false)
-            .putReadBuffer(bufBiasDelta   ,false)
-            .putReadBuffer(bufWeightDelta ,true);
+            .putReadBuffer(bufNewDelta    ,false);
         bufNewDelta.getBuffer().get(newDelta);
-        bufBiasDelta.getBuffer().get(biasDelta);
-        bufWeightDelta.getBuffer().get(weightDelta);
 
         bufInput       .release();
         bufDelta       .release();
         bufResult      .release();
         bufNewDelta    .release();
-        bufWeightDelta .release();
-        bufBiasDelta   .release();
 
     }
     public void backword(int inputSize, int outputSize,

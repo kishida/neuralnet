@@ -30,6 +30,41 @@ public class FullyForwardCL {
     public void forward(int inputSize, int outputSize, int[] dropout,
             float[] input, float[] weight, float[] bias, float[] result,
             ActivationFunction activation){
+        CLBuffer<FloatBuffer> bufWeight = OpenCL.createReadBuffer(weight);
+        CLBuffer<FloatBuffer> bufBias = OpenCL.createReadBuffer(bias);
+
+        forward(inputSize, outputSize, dropout, input, bufWeight, bufBias, result, activation);
+
+        OpenCL.getQueue()
+                .putWriteBuffer(bufWeight, false)
+                .putWriteBuffer(bufBias, false);
+        bufWeight.release();
+        bufBias.release();
+
+    }
+    public void forward(int inputSize, int outputSize, int[] dropout,
+           float[] input, CLBuffer<FloatBuffer> bufWeight,
+           CLBuffer<FloatBuffer> bufBias, float[] result,
+           ActivationFunction activation){
+        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
+        CLBuffer<FloatBuffer> bufResult = OpenCL.createReadWriteBuffer(result.length);
+
+        OpenCL.getQueue()
+                .putWriteBuffer(bufInput, false);
+
+        forward(inputSize, outputSize, dropout, bufInput, bufWeight, bufBias, bufResult, activation);
+
+        OpenCL.getQueue().putReadBuffer(bufResult, true);
+        bufResult.getBuffer().get(result);
+
+        bufInput.release();
+        bufResult.release();
+
+    }
+    public void forward(int inputSize, int outputSize, int[] dropout,
+           CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufWeight,
+           CLBuffer<FloatBuffer> bufBias, CLBuffer<FloatBuffer> bufResult,
+           ActivationFunction activation){
         if(progFully == null){
             progFully = OpenCL.compile("fully_forward.cl");
             forwardKernel = progFully.createCLKernel("forward");
@@ -40,19 +75,11 @@ public class FullyForwardCL {
         }
 
         CLBuffer<IntBuffer> bufDropout = OpenCL.createReadBuffer(dropout);
-        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
-        CLBuffer<FloatBuffer> bufWeight = OpenCL.createReadBuffer(weight);
-        CLBuffer<FloatBuffer> bufBias = OpenCL.createReadBuffer(bias);
-        CLBuffer<FloatBuffer> bufResult = OpenCL.createReadWriteBuffer(result.length);
-
         OpenCL.getQueue()
-                .putWriteBuffer(bufDropout, false)
-                .putWriteBuffer(bufInput, false)
-                .putWriteBuffer(bufWeight, false)
-                .putWriteBuffer(bufBias, false);
+                .putWriteBuffer(bufDropout, false);
 
         forwardKernel.rewind()
-                .putArg(input.length)
+                .putArg(inputSize)
                 .putArg(outputSize)
                 .putArgs(
                         bufDropout,
@@ -63,7 +90,7 @@ public class FullyForwardCL {
         OpenCL.execute(forwardKernel, outputSize);
 
         if(activation instanceof SoftMaxFunction){
-            CLBuffer<FloatBuffer> bufExped = OpenCL.createReadWriteBuffer(result.length);
+            CLBuffer<FloatBuffer> bufExped = OpenCL.createReadWriteBuffer(outputSize);
             CLKernel kernelActPre = actKernels.get("softmax_before");
             kernelActPre.rewind()
                     .putArg(bufResult)
@@ -85,14 +112,7 @@ public class FullyForwardCL {
             OpenCL.execute(kernelAct, outputSize);
         }
 
-        OpenCL.getQueue().putReadBuffer(bufResult, true);
-        bufResult.getBuffer().get(result);
-
         bufDropout.release();
-        bufInput.release();
-        bufWeight.release();
-        bufBias.release();
-        bufResult.release();
 
     }
 }

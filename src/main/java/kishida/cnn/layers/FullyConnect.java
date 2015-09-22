@@ -8,12 +8,15 @@ package kishida.cnn.layers;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jogamp.opencl.CLBuffer;
+import java.nio.FloatBuffer;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.kernels.FullyForwardKernel;
 import kishida.cnn.opencl.FullyBackwordCL;
 import kishida.cnn.opencl.FullyForwardCL;
+import kishida.cnn.opencl.OpenCL;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -24,10 +27,8 @@ import lombok.Setter;
  */
 public class FullyConnect extends NeuralLayer implements LerningLayer{
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     private float[]weight;
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     private float[] bias;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @Getter
@@ -50,6 +51,9 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private ActivationFunction activation;
     @Getter
     private float initBias;
+
+    CLBuffer<FloatBuffer> bufWeight;
+    CLBuffer<FloatBuffer> bufBias;
 
     public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, boolean useGpu) {
         this(name, outputSize, null, null, initBias, null, null, dropoutRate, null, activation, useGpu);
@@ -113,6 +117,29 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         if(biasDelta == null){
             this.biasDelta = new float[outputSize];
         }
+        if(useGpu){
+            bufWeight = OpenCL.createReadWriteBuffer(weight);
+            bufBias = OpenCL.createReadWriteBuffer(bias);
+            OpenCL.getQueue()
+                    .putWriteBuffer(bufWeight, false)
+                    .putWriteBuffer(bufBias, false);
+        }
+    }
+
+    public float[] getWeight() {
+        if(bufWeight != null){
+            OpenCL.getQueue().putReadBuffer(bufWeight, true);
+            bufWeight.getBuffer().get(weight).rewind();
+        }
+        return weight;
+    }
+
+    public float[] getBias() {
+        if(bufBias != null){
+            OpenCL.getQueue().putReadBuffer(bufBias, true);
+            bufBias.getBuffer().get(bias).rewind();
+        }
+        return bias;
     }
 
     @JsonProperty("activationObj")
@@ -138,7 +165,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
                 FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
                 activation.applyAfter(result);
             }else{
-                FullyForwardCL.INSTANCE.forward(inputSize, outputSize, dropout, in, weight, bias, result, activation);
+                FullyForwardCL.INSTANCE.forward(inputSize, outputSize, dropout, in, bufWeight, bufBias, result, activation);
             }
         }else{
             FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
@@ -149,9 +176,9 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
 
     @Override
     public float[] backward(float[] in, float[] delta) {
-        if(false){
+        if(useGpu && false){
             FullyBackwordCL.INSTANCE.backword(inputSize, outputSize,
-                    dropout, in, delta, result, weight, weightDelta, biasDelta, newDelta,
+                    dropout, in, delta, result, bufWeight, weightDelta, biasDelta, newDelta,
                     parent.getLearningRate(), activation);
         }else{
             for(int i = 0; i < result.length; ++i){
@@ -192,6 +219,13 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         IntStream.range(0, bias.length).parallel().forEach(i -> {
             bias[i] += biasDelta[i] / parent.getMiniBatch();
         });
+        if(bufWeight != null){
+            bufWeight.getBuffer().put(weight).rewind();
+            bufBias.getBuffer().put(bias).rewind();
+            OpenCL.getQueue()
+                    .putWriteBuffer(bufWeight, false)
+                    .putWriteBuffer(bufBias, false);
+        }
     }
 
     @Override

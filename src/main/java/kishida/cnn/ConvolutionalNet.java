@@ -59,10 +59,10 @@ public class ConvolutionalNet {
     private static final int MINI_BATCH = 128;
     private static final float MOMENTAM = 0.9f;
     public static final String AVERAGE_PNG = "average.png";
-    private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\alexnet.json.txt";
-    private static final String RESOURCE_NAME = "/alexnet_def.json";
-    //private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\tinynet.json.txt";
-    //private static final String RESOURCE_NAME = "/tinynet_def.json";
+    //private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\alexnet.json.txt";
+    //private static final String RESOURCE_NAME = "/alexnet_def.json";
+    private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\tinynet.json.txt";
+    private static final String RESOURCE_NAME = "/tinynet_def.json";
 
     static class Img{
 

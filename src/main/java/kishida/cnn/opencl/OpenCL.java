@@ -85,7 +85,7 @@ public class OpenCL {
         return buf;
     }
     public static CLCommandQueue execute(CLKernel kernel, int range){
-        int localWorkSize = Math.min(device.getMaxWorkGroupSize(), 256);
+        int localWorkSize = Math.min(device.getMaxWorkGroupSize(), 128);
         int globalWorkSize = roundUp(localWorkSize, range);
         kernel.putArg(range);
         return getQueue().put1DRangeKernel(kernel, 0, globalWorkSize, localWorkSize);

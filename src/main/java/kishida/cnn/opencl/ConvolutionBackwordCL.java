@@ -154,8 +154,6 @@ public class ConvolutionBackwordCL {
                         bufBiasDelta);
         OpenCL.execute(biasAfterKernel, outputChannels);
 
-        bufTempBias.release();
-
     }
 
     public void prepare(float momentam,

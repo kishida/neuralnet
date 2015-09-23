@@ -150,7 +150,6 @@ public class FullyBackwordCL {
                 .putArg(bufBiasDelta);
         OpenCL.execute(kernelBias, outputSize);
 
-        bufDropout     .release();
         bufDiffed      .release();
     }
 

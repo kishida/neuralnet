@@ -73,6 +73,18 @@ public class InputLayer extends ImageNeuralLayer implements FullGpuEnabled {
         return null;
     }
 
+    @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta) {
+        // do nothing
+        return null;
+    }
+
+    @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, float[] delta) {
+        // do nothing
+        return null;
+    }
+
     public void setInput(float[] input){
         result = input;
         bufResult.getBuffer().put(result).rewind();

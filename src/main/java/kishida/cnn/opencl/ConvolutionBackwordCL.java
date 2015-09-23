@@ -31,13 +31,17 @@ public class ConvolutionBackwordCL {
         CLBuffer<FloatBuffer> bufFilter = OpenCL.createReadBuffer(filter);
         CLBuffer<FloatBuffer> bufFilterDelta = OpenCL.createReadWriteBuffer(filterDelta);
         CLBuffer<FloatBuffer> bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
+        CLBuffer<FloatBuffer> bufResult = OpenCL.createReadBuffer(result);
+        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
         OpenCL.getQueue()
                 .putWriteBuffer(bufFilter, false)
                 .putWriteBuffer(bufFilterDelta, false)
-                .putWriteBuffer(bufBiasDelta, false);
+                .putWriteBuffer(bufBiasDelta, false)
+                .putWriteBuffer(bufInput, false)
+                .putWriteBuffer(bufResult, false);
 
-        backward(delta, result,
-                input, inputChannels, inputWidth, inputHeight,
+        backward(delta, bufResult,
+                bufInput, inputChannels, inputWidth, inputHeight,
                 bufFilter, outputChannels, outputWidth, outputHeight,
                 bufFilterDelta, bufBiasDelta,
                 filterSize, stride, newDelta, learningRate);
@@ -51,25 +55,24 @@ public class ConvolutionBackwordCL {
         bufFilter.release();
         bufFilterDelta.release();
         bufBiasDelta.release();
+        bufInput.release();
+        bufResult.release();
     }
-    public void backward(float[] delta, float[] result,
-            float[] input, int inputChannels, int inputWidth, int inputHeight,
+    public void backward(float[] delta, CLBuffer<FloatBuffer> bufResult,
+            CLBuffer<FloatBuffer> bufInput, int inputChannels, int inputWidth, int inputHeight,
             CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
             CLBuffer<FloatBuffer> bufFilterDelta, CLBuffer<FloatBuffer> bufBiasDelta,
             int filterSize, int stride, float[] newDelta, float learningRate) {
         CLBuffer<FloatBuffer> bufDelta = OpenCL.createReadBuffer(delta);
-        CLBuffer<FloatBuffer> bufResult = OpenCL.createReadBuffer(result);
-        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
         CLBuffer<FloatBuffer> bufNewDelta = OpenCL.createWriteBuffer(newDelta.length);
+        CLBuffer<FloatBuffer> bufTempBias = OpenCL.createReadWriteBuffer(outputChannels * outputWidth * outputHeight);
         OpenCL.getQueue()
-                .putWriteBuffer(bufDelta, false)
-                .putWriteBuffer(bufResult, false)
-                .putWriteBuffer(bufInput, false);
+                .putWriteBuffer(bufDelta, false);
 
         backward(bufDelta, bufResult,
                 bufInput, inputChannels, inputWidth, inputHeight,
                 bufFilter, outputChannels, outputWidth, outputHeight,
-                bufFilterDelta, bufBiasDelta,
+                bufFilterDelta, bufBiasDelta, bufTempBias,
                 filterSize, stride, bufNewDelta, learningRate);
 
         OpenCL.getQueue()
@@ -77,21 +80,19 @@ public class ConvolutionBackwordCL {
         bufNewDelta.getBuffer().get(newDelta);
 
         bufDelta.release();
-        bufResult.release();
-        bufInput.release();
         bufNewDelta.release();
+        bufTempBias.release();
     }
     public void backward(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
             CLBuffer<FloatBuffer> bufInput, int inputChannels, int inputWidth, int inputHeight,
             CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
             CLBuffer<FloatBuffer> bufFilterDelta, CLBuffer<FloatBuffer> bufBiasDelta,
+            CLBuffer<FloatBuffer> bufTempBias,
             int filterSize, int stride, CLBuffer<FloatBuffer> bufNewDelta, float learningRate) {
         if(prog == null){
             prog = OpenCL.compile("convolution_backword.cl");
             kernels = prog.createCLKernels();
         }
-
-        CLBuffer<FloatBuffer> bufTempBias = OpenCL.createReadWriteBuffer(outputChannels * outputWidth * outputHeight);
 
         CLKernel deltaKernel = prog.createCLKernel("delta");
         deltaKernel

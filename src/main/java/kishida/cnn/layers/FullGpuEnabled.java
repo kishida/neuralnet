@@ -7,6 +7,7 @@ package kishida.cnn.layers;
 
 import com.jogamp.opencl.CLBuffer;
 import java.nio.FloatBuffer;
+import kishida.cnn.opencl.OpenCL;
 
 /**
  *
@@ -17,5 +18,14 @@ public interface FullGpuEnabled {
         return true;
     }
     CLBuffer<FloatBuffer> getBufResult();
-    void forward(CLBuffer<FloatBuffer> input);
+    void forward(CLBuffer<FloatBuffer> bufInput);
+    CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta);
+    default CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, float[] delta){
+        CLBuffer<FloatBuffer> bufDelta = OpenCL.createReadBuffer(delta);
+        OpenCL.getQueue().putWriteBuffer(bufDelta, false);
+        CLBuffer<FloatBuffer> result = backwardBuf(bufInput, bufDelta);
+        bufDelta.release();
+        return result;
+    }
+
 }

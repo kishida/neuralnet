@@ -68,19 +68,34 @@ public class MaxPoolingCL {
             int outputWidth, int outputHeight,
             int size, int stride,
             float[] input, float[] delta, float[] newDelta){
+        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
+        CLBuffer<FloatBuffer> bufDelta = OpenCL.createReadBuffer(delta);
+        CLBuffer<FloatBuffer> bufNewDelta = OpenCL.createReadWriteBuffer(newDelta);
+        OpenCL.getQueue()
+                .putWriteBuffer(bufInput, false)
+                .putWriteBuffer(bufDelta, false);
+
+        backword(inputChannel, inputWidth, inputHeight,
+                outputWidth, outputHeight, size, stride,
+                bufInput, bufDelta, bufNewDelta);
+        
+        OpenCL.getQueue().putReadBuffer(bufNewDelta, true);
+        bufNewDelta.getBuffer().get(newDelta);
+
+        bufInput.release();
+        bufDelta.release();
+        bufNewDelta.release();
+    }
+    public void backword(int inputChannel, int inputWidth, int inputHeight,
+            int outputWidth, int outputHeight,
+            int size, int stride,
+            CLBuffer<FloatBuffer> bufInput,
+            CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufNewDelta){
         if(prog == null){
             prog = OpenCL.compile("maxpooling.cl");
             kernels = prog.createCLKernels();
         }
 
-        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadBuffer(input);
-        CLBuffer<FloatBuffer> bufDelta = OpenCL.createReadBuffer(delta);
-        CLBuffer<FloatBuffer> bufNewDelta = OpenCL.createReadWriteBuffer(newDelta);
-
-        OpenCL.getQueue()
-                .putWriteBuffer(bufInput, false)
-                .putWriteBuffer(bufDelta, false)
-                .putWriteBuffer(bufNewDelta, false);
         CLKernel kernelForward = kernels.get("backword");
         kernelForward.rewind()
                 .putArg(inputWidth)
@@ -95,12 +110,6 @@ public class MaxPoolingCL {
                     bufNewDelta);
         OpenCL.execute(kernelForward,
                 inputChannel * inputWidth * inputHeight);
-        OpenCL.getQueue().putReadBuffer(bufNewDelta, true);
-        bufNewDelta.getBuffer().get(newDelta);
-
-        bufInput.release();
-        bufDelta.release();
-        bufNewDelta.release();
 
     }
 

@@ -10,11 +10,13 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.jogamp.opencl.CLBuffer;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -23,6 +25,7 @@ import java.util.Random;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.LogisticFunction;
 import kishida.cnn.layers.ConvolutionLayer;
+import kishida.cnn.layers.FullGpuEnabled;
 import kishida.cnn.layers.FullyConnect;
 import kishida.cnn.layers.InputLayer;
 import kishida.cnn.layers.MaxPoolingLayer;
@@ -165,8 +168,23 @@ public class NeuralNetwork {
             delta[idx] = correctData[idx] - output[idx];
         }
         //逆伝播
+        CLBuffer<FloatBuffer> bufDelta = null;
         for(int i = layers.size() - 1; i >= 1; --i){
-            delta = layers.get(i).backward(delta);
+            FullGpuEnabled layer = layers.get(i) instanceof FullGpuEnabled ?
+                    (FullGpuEnabled) layers.get(i) : null;
+            FullGpuEnabled pre = layers.get(i).getPreLayer() instanceof FullGpuEnabled ?
+                    (FullGpuEnabled)layers.get(i).getPreLayer() : null;
+            if(true && layer != null && pre != null && layer.isUseGpu()){
+                if(bufDelta == null){
+                    bufDelta = layer.backwardBuf(pre.getBufResult(), delta);
+                }else{
+                    bufDelta = layer.backwardBuf(pre.getBufResult(), bufDelta);
+                }
+                delta = null;
+            }else{
+                delta = layers.get(i).backward(delta);
+                bufDelta = null;
+            }
         }
 
         return output;

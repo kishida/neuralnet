@@ -128,6 +128,11 @@ public class MultiNormalizeLayer extends ImageNeuralLayer implements FullGpuEnab
     }
 
     @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta) {
+        return bufDelta;
+    }
+
+    @Override
     public String toString() {
         return String.format("%s:Multi channel normalize size:%dx%d in:%dx%dx%d out %dx%dx%d",
                 name, this.size, this.size,

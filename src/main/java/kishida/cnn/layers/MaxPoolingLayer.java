@@ -32,6 +32,8 @@ public class MaxPoolingLayer extends ImageNeuralLayer implements FullGpuEnabled 
     @Getter
     CLBuffer<FloatBuffer> bufResult;
 
+    CLBuffer<FloatBuffer> bufNewDelta;
+
     @JsonCreator
     public MaxPoolingLayer(
             @JsonProperty("name") String name,
@@ -51,6 +53,7 @@ public class MaxPoolingLayer extends ImageNeuralLayer implements FullGpuEnabled 
         result = new float[outputChannels * outputWidth * outputHeight];
         newDelta = new float[inputChannels * inputWidth * inputHeight];
         bufResult = OpenCL.createReadWriteBuffer(result.length);
+        bufNewDelta = OpenCL.createReadWriteBuffer(newDelta.length);
     }
 
     @Override
@@ -146,6 +149,14 @@ public class MaxPoolingLayer extends ImageNeuralLayer implements FullGpuEnabled 
             });
         }
         return newDelta;
+    }
+
+    @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta) {
+        MaxPoolingCL.INSTANCE.backword(inputChannels, inputWidth, inputHeight,
+                outputWidth, outputHeight, size, stride,
+                bufInput, bufDelta, bufNewDelta);
+        return bufNewDelta;
     }
 
     public static void main(String[] args) {

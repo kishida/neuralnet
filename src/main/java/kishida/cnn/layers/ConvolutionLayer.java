@@ -57,6 +57,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, 
     CLBuffer<FloatBuffer> bufBias;
     CLBuffer<FloatBuffer> bufFilterDelta;
     CLBuffer<FloatBuffer> bufBiasDelta;
+    CLBuffer<FloatBuffer> bufDelta;
+    CLBuffer<FloatBuffer> bufNewDelta;
+    CLBuffer<FloatBuffer> bufTempBias;
 
     @JsonIgnore
     @Getter
@@ -128,6 +131,9 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, 
             this.bufFilterDelta = OpenCL.createReadWriteBuffer(filterDelta);
             this.bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
             this.bufResult = OpenCL.createReadWriteBuffer(result.length);
+            this.bufDelta = OpenCL.createReadWriteBuffer(result.length);
+            this.bufNewDelta = OpenCL.createWriteBuffer(newDelta.length);
+            bufTempBias = OpenCL.createReadWriteBuffer(outputChannels * outputWidth * outputHeight);
             OpenCL.getQueue()
                     .putWriteBuffer(bufFilter, false)
                     .putWriteBuffer(bufBias, false)
@@ -247,11 +253,18 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, 
             }else{
                 // JOCL
                 if(true){
+                    bufDelta.getBuffer().put(delta).rewind();
+                    OpenCL.getQueue().putWriteBuffer(bufDelta, false);
+
                     ConvolutionBackwordCL.INSTANCE.backward(
-                            delta, result, input,
+                            bufDelta, bufResult, ((FullGpuEnabled)preLayer).getBufResult(),
                             inputChannels, inputWidth, inputHeight,
                             bufFilter, outputChannels, outputWidth, outputHeight,
-                            bufFilterDelta, bufBiasDelta, filterSize, stride, newDelta, parent.getLearningRate());
+                            bufFilterDelta, bufBiasDelta, bufTempBias, filterSize, stride, bufNewDelta,
+                            parent.getLearningRate());
+
+                    OpenCL.getQueue().putReadBuffer(bufNewDelta, true);
+                    bufNewDelta.getBuffer().get(newDelta).rewind();
                 }else{
                     ConvolutionBackwordCL.INSTANCE.backward(
                             delta, result, input,
@@ -269,6 +282,16 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, 
                     filterDelta, biasDelta,
                     filterSize, stride, parent.getLearningRate(), false);
         }
+    }
+
+    @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta) {
+        ConvolutionBackwordCL.INSTANCE.backward(bufDelta, bufResult, bufInput,
+                inputChannels, inputWidth, inputHeight,
+                bufFilter, outputChannels, outputWidth, outputHeight,
+                bufFilterDelta, bufBiasDelta, bufTempBias,
+                filterSize, stride, bufNewDelta, parent.getLearningRate());
+        return bufNewDelta;
     }
 
     @Override
@@ -318,12 +341,12 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, 
 
     @Override
     public DoubleSummaryStatistics getWeightStatistics() {
-        return FloatUtil.summary(filter);
+        return FloatUtil.summary(getFilter());
     }
 
     @Override
     public DoubleSummaryStatistics getBiasStatistics() {
-        return FloatUtil.summary(bias);
+        return FloatUtil.summary(getBias());
     }
 
 }

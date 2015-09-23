@@ -62,6 +62,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer, FullGpuEn
     @JsonIgnore
     @Getter
     CLBuffer<FloatBuffer> bufResult;
+    CLBuffer<FloatBuffer> bufNewDelta;
 
     public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, boolean useGpu) {
         this(name, outputSize, null, null, initBias, null, null, dropoutRate, null, activation, useGpu);
@@ -132,6 +133,7 @@ public class FullyConnect extends NeuralLayer implements LerningLayer, FullGpuEn
             bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
             bufResult = OpenCL.createReadWriteBuffer(result.length);
             bufDropout = OpenCL.createReadBuffer(dropout);
+            bufNewDelta = OpenCL.createReadWriteBuffer(newDelta.length);
             OpenCL.getQueue()
                     .putWriteBuffer(bufWeight, false)
                     .putWriteBuffer(bufBias, false)
@@ -255,6 +257,15 @@ public class FullyConnect extends NeuralLayer implements LerningLayer, FullGpuEn
             });
         }
         return newDelta;
+    }
+
+    @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta) {
+        FullyBackwordCL.INSTANCE.backword(inputSize, outputSize, bufDropout,
+                bufInput, bufDelta, bufResult,
+                bufWeight, bufWeightDelta,
+                bufBiasDelta, bufNewDelta, parent.getLearningRate(), activation);
+        return bufNewDelta;
     }
 
     @Override

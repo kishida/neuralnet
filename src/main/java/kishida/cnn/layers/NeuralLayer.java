@@ -36,7 +36,8 @@ public abstract class NeuralLayer {
     @Getter
     float[] result;
 
-    @Setter
+    @JsonIgnore
+    @Setter @Getter
     NeuralLayer preLayer;
 
     @Setter
@@ -76,7 +77,7 @@ public abstract class NeuralLayer {
 
     @JsonIgnore
     public DoubleSummaryStatistics getResultStatistics(){
-        return FloatUtil.summary(result);
+        return FloatUtil.summary(getResult());
     }
 
 }

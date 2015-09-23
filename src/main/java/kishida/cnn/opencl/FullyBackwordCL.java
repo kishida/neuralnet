@@ -69,13 +69,15 @@ public class FullyBackwordCL {
         CLBuffer<FloatBuffer> bufDelta       = OpenCL.createReadBuffer(delta);
         CLBuffer<FloatBuffer> bufResult      = OpenCL.createReadBuffer(result);
         CLBuffer<FloatBuffer> bufNewDelta    = OpenCL.createWriteBuffer(newDelta.length);
+        CLBuffer<IntBuffer>   bufDropout     = OpenCL.createReadBuffer(dropout);
         OpenCL.getQueue()
             .putWriteBuffer(bufInput       ,false)
             .putWriteBuffer(bufDelta       ,false)
-            .putWriteBuffer(bufResult      ,false);
+            .putWriteBuffer(bufResult      ,false)
+            .putWriteBuffer(bufDropout     ,false);
 
         backword(inputSize, outputSize,
-                dropout, bufInput, bufDelta,
+                bufDropout, bufInput, bufDelta,
                 bufResult, bufWeight, bufWeightDelta, bufBiasDelta,
                 bufNewDelta,
                 learningRate, activation);
@@ -88,10 +90,11 @@ public class FullyBackwordCL {
         bufDelta       .release();
         bufResult      .release();
         bufNewDelta    .release();
+        bufDropout     .release();
 
     }
     public void backword(int inputSize, int outputSize,
-            int[] dropout, CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta,
+            CLBuffer<IntBuffer> bufDropout, CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta,
             CLBuffer<FloatBuffer> bufResult, CLBuffer<FloatBuffer> bufWeight,
             CLBuffer<FloatBuffer> bufWeightDelta, CLBuffer<FloatBuffer> bufBiasDelta,
             CLBuffer<FloatBuffer> bufNewDelta,
@@ -105,11 +108,7 @@ public class FullyBackwordCL {
             actKernels = progActivation.createCLKernels();
         }
 
-        CLBuffer<IntBuffer>   bufDropout     = OpenCL.createReadBuffer(dropout);
         CLBuffer<FloatBuffer> bufDiffed      = OpenCL.createReadWriteBuffer(outputSize);
-
-        OpenCL.getQueue()
-            .putWriteBuffer(bufDropout     ,false);
 
         CLKernel actKernel = actKernels.get(activation.getName() + "_diff");
         actKernel.rewind()

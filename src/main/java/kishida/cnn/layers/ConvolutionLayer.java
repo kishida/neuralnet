@@ -46,6 +46,7 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, 
     @Getter
     int filterSize;
     private ActivationFunction activation;
+    @JsonProperty
     @Getter @Setter
     boolean useGpu;
     @Getter

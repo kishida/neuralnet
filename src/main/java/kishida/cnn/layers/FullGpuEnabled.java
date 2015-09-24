@@ -5,8 +5,10 @@
  */
 package kishida.cnn.layers;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.jogamp.opencl.CLBuffer;
 import java.nio.FloatBuffer;
+import java.util.Objects;
 import kishida.cnn.opencl.OpenCL;
 
 /**
@@ -14,6 +16,7 @@ import kishida.cnn.opencl.OpenCL;
  * @author naoki
  */
 public interface FullGpuEnabled {
+    @JsonIgnore
     default boolean isUseGpu(){
         return true;
     }
@@ -21,6 +24,7 @@ public interface FullGpuEnabled {
     void forward(CLBuffer<FloatBuffer> bufInput);
     CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta);
     default CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, float[] delta){
+        Objects.requireNonNull(delta, "delta is null on " + ((NeuralLayer)this).getName());
         CLBuffer<FloatBuffer> bufDelta = OpenCL.createReadBuffer(delta);
         OpenCL.getQueue().putWriteBuffer(bufDelta, false);
         CLBuffer<FloatBuffer> result = backwardBuf(bufInput, bufDelta);

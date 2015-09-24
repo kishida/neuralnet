@@ -24,6 +24,7 @@ public class MultiNormalizeLayer extends ImageNeuralLayer implements FullGpuEnab
     int size;
     @Getter
     float threshold;
+    @JsonProperty
     @Getter
     boolean useGpu;
     @JsonIgnore

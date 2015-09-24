@@ -5,6 +5,7 @@
  */
 package kishida.cnn.activation;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
@@ -28,5 +29,6 @@ public abstract class ActivationFunction {
     /** 微分 */
     public abstract float diff(float value);
 
+    @JsonIgnore
     public abstract String getName();
 }

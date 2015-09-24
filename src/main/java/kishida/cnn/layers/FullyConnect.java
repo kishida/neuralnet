@@ -44,8 +44,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer, FullGpuEn
     private int[] dropout;
     @Getter
     private float dropoutRate = 1;
-    //@Getter
-    @Setter
+    @JsonProperty
+    @Setter @Getter
     private boolean useGpu;
     private float[] newDelta;
     private float[] diffed;
@@ -172,11 +172,6 @@ public class FullyConnect extends NeuralLayer implements LerningLayer, FullGpuEn
             bufBiasDelta.getBuffer().get(biasDelta).rewind();
         }
         return biasDelta;
-    }
-
-    @Override
-    public boolean isUseGpu() {
-        return useGpu;
     }
 
     @Override

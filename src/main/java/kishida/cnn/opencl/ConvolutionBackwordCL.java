@@ -83,7 +83,7 @@ public class ConvolutionBackwordCL {
         bufNewDelta.release();
         bufTempBias.release();
     }
-    public void backward(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
+    public void backward_sep(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
             CLBuffer<FloatBuffer> bufInput, int inputChannels, int inputWidth, int inputHeight,
             CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
             CLBuffer<FloatBuffer> bufFilterDelta, CLBuffer<FloatBuffer> bufBiasDelta,
@@ -94,7 +94,7 @@ public class ConvolutionBackwordCL {
             kernels = prog.createCLKernels();
         }
 
-        CLKernel deltaKernel = prog.createCLKernel("delta");
+        CLKernel deltaKernel = prog.createCLKernel("delta_kernel");
         deltaKernel
                 .rewind()
                 .putArg(inputWidth)
@@ -113,7 +113,7 @@ public class ConvolutionBackwordCL {
         OpenCL.execute(deltaKernel,
                 inputChannels * inputWidth * inputHeight);
 
-        CLKernel filterKernel = kernels.get("filter");
+        CLKernel filterKernel = kernels.get("filter_kernel");
         filterKernel
                 .rewind()
                 .putArg(inputChannels)
@@ -133,7 +133,7 @@ public class ConvolutionBackwordCL {
         OpenCL.execute(filterKernel,
                 outputChannels * inputChannels * filterSize * filterSize);
 
-        CLKernel biasKernel = kernels.get("bias");
+        CLKernel biasKernel = kernels.get("bias_kernel");
         biasKernel
                 .rewind()
                 .putArgs(
@@ -155,7 +155,54 @@ public class ConvolutionBackwordCL {
         OpenCL.execute(biasAfterKernel, outputChannels);
 
     }
+    public void backward(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
+            CLBuffer<FloatBuffer> bufInput, int inputChannels, int inputWidth, int inputHeight,
+            CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
+            CLBuffer<FloatBuffer> bufFilterDelta, CLBuffer<FloatBuffer> bufBiasDelta,
+            CLBuffer<FloatBuffer> bufTempBias,
+            int filterSize, int stride, CLBuffer<FloatBuffer> bufNewDelta, float learningRate) {
+        if(prog == null){
+            prog = OpenCL.compile("convolution_backword.cl");
+            kernels = prog.createCLKernels();
+        }
+        CLKernel dfbKernel = kernels.get("dfb");
+        dfbKernel.rewind()
+                .putArg(inputChannels)
+                .putArg(inputWidth)
+                .putArg(inputHeight)
+                .putArg(outputChannels)
+                .putArg(outputWidth)
+                .putArg(outputHeight)
+                .putArg(filterSize)
+                .putArg(stride)
+                .putArg(learningRate)
+                .putArgs(
+                        bufInput,
+                        bufResult,
+                        bufFilter,
+                        bufFilterDelta,
+                        bufDelta,
+                        bufNewDelta,
+                        bufTempBias)
+                .putArg(inputChannels * inputWidth * inputHeight)
+                .putArg(outputChannels * inputChannels * filterSize * filterSize)
+                .putArg(outputChannels * outputWidth * outputHeight);
+        OpenCL.execute(dfbKernel,
+                inputChannels * inputWidth * inputHeight +
+                outputChannels * inputChannels * filterSize * filterSize +
+                outputChannels * outputWidth * outputHeight);
 
+        CLKernel biasAfterKernel = kernels.get("biasAfter");
+        biasAfterKernel
+                .rewind()
+                .putArg(outputWidth)
+                .putArg(outputHeight)
+                .putArgs(
+                        bufTempBias,
+                        bufBiasDelta);
+        OpenCL.execute(biasAfterKernel, outputChannels);
+
+    }
     public void prepare(float momentam,
             int filterCount, int biasCount,
             CLBuffer<FloatBuffer> bufFilterDelta,

@@ -16,6 +16,7 @@ __kernel void forward(
    if(fxy >= count){
       return;
    }
+
    int f = fxy / (outputHeight * outputWidth);
    int x = (fxy % (outputHeight * outputWidth)) / outputHeight;
    int y = fxy % outputHeight;
@@ -38,6 +39,62 @@ __kernel void forward(
    float rs = r + bias[f];
    result[fxy] = rs >= 0 ? rs : 0;
 }
+
+__kernel void forward_local(
+   int outputHeight, 
+   int outputWidth, 
+   int inputChannels, 
+   int filterSize, 
+   int stride, 
+   int inputWidth, 
+   int inputHeight, 
+   __global const float *input, 
+   __global const float *filter, 
+   __global float *result, 
+   __global const float *bias, 
+   int count
+){
+   int fxy = get_global_id(0);
+   if(fxy >= count){
+      return;
+   }
+   int f = fxy / (outputHeight * outputWidth);
+   int x = (fxy % (outputHeight * outputWidth)) / outputHeight;
+   int y = fxy % outputHeight;
+
+    __local float lfilter[384 * 3 * 3]; //
+    int len = inputChannels * filterSize * filterSize;
+    /*
+    int start = get_local_id(0) * len / outputChannels;
+    int end = (get_local_id(0) + 1) * len / outputChannels;
+    for(int i = start; i < end; ++i){
+        lfilter[i] = filter[f * inputChannels * filterSize * filterSize + i];
+    }*/
+    event_t ev;
+    ev = async_work_group_copy(lfilter, 
+        filter + f * inputChannels * filterSize * filterSize,
+        len, ev);
+    wait_group_events(1, &ev);
+
+   float r = 0.0f;
+   for (int ch = 0; ch<inputChannels; ch++){
+      for (int i = 0; i<filterSize; i++){
+         int xx = ((x * stride) + i) - (filterSize / 2);
+         if (xx>=0 && xx<inputWidth){
+            for (int j = 0; j<filterSize; j++){
+               int yy = ((y * stride) + j) - (filterSize / 2);
+               if (yy>=0 && yy<inputHeight){
+                  r += input[ch * inputWidth * inputHeight + xx * inputHeight + yy] * 
+                          lfilter[ch * filterSize * filterSize + i * filterSize + j];
+               }
+            }
+         }
+      }
+   }
+   float rs = r + bias[f];
+   result[fxy] = rs >= 0 ? rs : 0;
+}
+
 
 __kernel void localNormalize(
    int outputWidth, 

@@ -83,6 +83,18 @@ public class ConvolutionBackwordCL {
         bufNewDelta.release();
         bufTempBias.release();
     }
+    public void backward(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
+            CLBuffer<FloatBuffer> bufInput, int inputChannels, int inputWidth, int inputHeight,
+            CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
+            CLBuffer<FloatBuffer> bufFilterDelta, CLBuffer<FloatBuffer> bufBiasDelta,
+            CLBuffer<FloatBuffer> bufTempBias,
+            int filterSize, int stride, CLBuffer<FloatBuffer> bufNewDelta, float learningRate) {
+        backward_sep(bufDelta, bufResult, bufInput, inputChannels, inputWidth, inputHeight,
+                bufFilter, outputChannels, outputWidth, outputHeight,
+                bufFilterDelta, bufBiasDelta, bufTempBias,
+                filterSize, stride, bufNewDelta, learningRate);
+    }
+
     public void backward_sep(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
             CLBuffer<FloatBuffer> bufInput, int inputChannels, int inputWidth, int inputHeight,
             CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
@@ -155,7 +167,7 @@ public class ConvolutionBackwordCL {
         OpenCL.execute(biasAfterKernel, outputChannels);
 
     }
-    public void backward(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
+    public void backward_gen(CLBuffer<FloatBuffer> bufDelta, CLBuffer<FloatBuffer> bufResult,
             CLBuffer<FloatBuffer> bufInput, int inputChannels, int inputWidth, int inputHeight,
             CLBuffer<FloatBuffer> bufFilter, int outputChannels, int outputWidth, int outputHeight,
             CLBuffer<FloatBuffer> bufFilterDelta, CLBuffer<FloatBuffer> bufBiasDelta,

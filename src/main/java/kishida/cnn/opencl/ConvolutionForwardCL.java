@@ -78,7 +78,7 @@ public class ConvolutionForwardCL {
             int filterSize, int stride, CLBuffer<FloatBuffer> bufBias){
         if(prog == null){
             prog = OpenCL.compile("convolution_forward.cl");
-            forwardKernel = prog.createCLKernel("forward");
+            forwardKernel = prog.createCLKernel("forward_local");
         }
 
         forwardKernel
@@ -95,8 +95,13 @@ public class ConvolutionForwardCL {
                         bufFilter,
                         bufResult,
                         bufBias);
+        /*
         OpenCL.execute(forwardKernel,
                 outputChannels * outputWidth * outputHeight);
+                */
+        forwardKernel.putArg(outputChannels * outputWidth * outputHeight);
+        OpenCL.getQueue().put1DRangeKernel(forwardKernel, 0,
+                outputChannels * outputWidth * outputHeight, outputChannels);
 
         normalizeKernel = prog.createCLKernel("localNormalize");
         normalizeKernel
@@ -109,5 +114,64 @@ public class ConvolutionForwardCL {
                 outputChannels * outputWidth * outputHeight);
 
     }
+    public static void main(String[] args) {
+        CLProgram prog = OpenCL.compile("convolution_forward.cl");
+        CLKernel forwardKernel = prog.createCLKernel("forward");
 
+        int inputChannels = 384;
+        int inputWidth = 14;
+        int inputHeight = 14;
+        int outputChannels = 384;
+        int outputWidth = 14;
+        int outputHeight = 14;
+        int filterSize = 3;
+        int stride = 1;
+        CLBuffer<FloatBuffer> bufInput = OpenCL.createReadWriteBuffer(
+                inputChannels * inputWidth * inputHeight);
+        CLBuffer<FloatBuffer> bufFilter = OpenCL.createReadWriteBuffer(
+                inputChannels * outputChannels * filterSize * filterSize);
+        CLBuffer<FloatBuffer> bufResult = OpenCL.createReadWriteBuffer(
+                outputChannels * outputWidth * outputHeight);
+        CLBuffer<FloatBuffer> bufBias = OpenCL.createReadWriteBuffer(
+                outputChannels);
+        long start = System.currentTimeMillis();
+        for(int i = 0; i < 5000; ++i){
+            forwardKernel
+                    .rewind()
+                    .putArg(outputHeight)
+                    .putArg(outputWidth)
+                    .putArg(inputChannels)
+                    .putArg(filterSize)
+                    .putArg(stride)
+                    .putArg(inputWidth)
+                    .putArg(inputHeight)
+                    .putArgs(
+                            bufInput,
+                            bufFilter,
+                            bufResult,
+                            bufBias)
+                    .putArg(outputChannels * outputWidth * outputHeight);
+            int workSize = outputChannels;
+            OpenCL.getQueue().put1DRangeKernel(forwardKernel,
+                    0, outputChannels * outputWidth * outputHeight,
+                    workSize);
+        }
+        OpenCL.getQueue().putBarrier();
+        System.out.println((System.currentTimeMillis() - start) / 1000.);
+        bufFilter.release();
+        System.out.println((System.currentTimeMillis() - start) / 1000.);
+        bufInput.release();
+        bufResult.release();
+        bufBias.release();
+        System.out.println((System.currentTimeMillis() - start) / 1000.);
+
+        forwardKernel.release();
+        prog.release();
+
+        OpenCL.getQueue().release();
+        OpenCL.getCtx().release();
+    }
+    static  int roundUp(int groupSize, int globalSize){
+        return ((globalSize + groupSize - 1) / groupSize) * groupSize;
+    }
 }

@@ -291,23 +291,13 @@ public class ConvolutionalNet {
                 Image lineGraph = createLineGraph(500, 200,
                         historyData, 1, 0);
                 historyLabel.setIcon(new ImageIcon(lineGraph));
-                //一段目のフィルタの表示
-                //全結合一段の表示
-                firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
-                //全結合二段の表示
-                lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
-
-                firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.getBias())));
-                secondBias.setIcon(new ImageIcon(createGraph(500, 128,
-                        conv2.getBias())));
-                fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.getBias())));
-                fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.getBias())));
 
                 //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
 
                 count[0]++;
                 nn.setImageIndex(nn.getImageIndex() + 1);
                 if(count[0] >= MINI_BATCH){
+
                     nn.joinBatch();
                     batchCount[0]++;
                     System.out.printf("%5d %4d %.2f/m %s %s%n", batchCount[0],
@@ -334,6 +324,18 @@ public class ConvolutionalNet {
                     count[0] = 0;
                     pStart[0] = System.currentTimeMillis();
                     nn.prepareBatch();
+
+                    //一段目のフィルタの表示
+                    //全結合一段の表示
+                    firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
+                    //全結合二段の表示
+                    lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
+
+                    firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.getBias())));
+                    secondBias.setIcon(new ImageIcon(createGraph(500, 128,
+                            conv2.getBias())));
+                    fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.getBias())));
+                    fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.getBias())));
 
                     // 1時間に一回保存する
                     int hour = LocalTime.now().getHour();

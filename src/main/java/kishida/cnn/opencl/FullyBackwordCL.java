@@ -35,34 +35,29 @@ public class FullyBackwordCL {
             float[] newDelta,
             float learningRate, ActivationFunction activation){
         CLBuffer<FloatBuffer> bufWeight      = OpenCL.createReadBuffer(weight);
-        CLBuffer<FloatBuffer> bufWeightDelta = OpenCL.createReadWriteBuffer(weightDelta);
-        CLBuffer<FloatBuffer> bufBiasDelta   = OpenCL.createReadWriteBuffer(biasDelta);
+        CLBuffer<FloatBuffer> bufWeightDelta = OpenCL.createReadWriteBuffer(weightDelta, biasDelta);
         OpenCL.getQueue()
             .putWriteBuffer(bufWeightDelta ,false)
-            .putWriteBuffer(bufBiasDelta   ,false)
             .putWriteBuffer(bufWeight      ,false);
 
         backword(inputSize, outputSize,
                 dropout, input, delta,
-                result, bufWeight, bufWeightDelta, bufBiasDelta,
+                result, bufWeight, bufWeightDelta,
                 newDelta,
                 learningRate, activation);
 
         OpenCL.getQueue()
-            .putReadBuffer(bufBiasDelta   ,false)
             .putReadBuffer(bufWeightDelta ,true);
-        bufBiasDelta.getBuffer().get(biasDelta);
         bufWeightDelta.getBuffer().get(weightDelta);
 
         bufWeight      .release();
         bufWeightDelta .release();
-        bufBiasDelta   .release();
     }
 
     public void backword(int inputSize, int outputSize,
             int[] dropout, float[] input, float[] delta,
             float[] result, CLBuffer<FloatBuffer> bufWeight,
-            CLBuffer<FloatBuffer> bufWeightDelta, CLBuffer<FloatBuffer> bufBiasDelta,
+            CLBuffer<FloatBuffer> bufWeightDelta,
             float[] newDelta,
             float learningRate, ActivationFunction activation){
         CLBuffer<FloatBuffer> bufInput       = OpenCL.createReadBuffer(input);
@@ -78,7 +73,7 @@ public class FullyBackwordCL {
 
         backword(inputSize, outputSize,
                 bufDropout, bufInput, bufDelta,
-                bufResult, bufWeight, bufWeightDelta, bufBiasDelta,
+                bufResult, bufWeight, bufWeightDelta,
                 bufNewDelta,
                 learningRate, activation);
 
@@ -96,7 +91,7 @@ public class FullyBackwordCL {
     public void backword(int inputSize, int outputSize,
             CLBuffer<IntBuffer> bufDropout, CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta,
             CLBuffer<FloatBuffer> bufResult, CLBuffer<FloatBuffer> bufWeight,
-            CLBuffer<FloatBuffer> bufWeightDelta, CLBuffer<FloatBuffer> bufBiasDelta,
+            CLBuffer<FloatBuffer> bufWeightDelta,
             CLBuffer<FloatBuffer> bufNewDelta,
             float learningRate, ActivationFunction activation){
         if(prog == null){
@@ -138,19 +133,34 @@ public class FullyBackwordCL {
                         bufDiffed,
                         bufWeight,
                         bufWeightDelta);
-        OpenCL.execute(kernelWeight, inputSize * outputSize);
-
-        CLKernel kernelBias = kernels.get("backword_bias");
-        kernelBias.rewind()
-                .putArg(outputSize)
-                .putArg(learningRate)
-                .putArg(bufDropout)
-                .putArg(bufDelta)
-                .putArg(bufDiffed)
-                .putArg(bufBiasDelta);
-        OpenCL.execute(kernelBias, outputSize);
+        OpenCL.execute(kernelWeight, inputSize * outputSize + outputSize);
 
         bufDiffed      .release();
+    }
+    public void prepare(float momentam,
+            int filterCount, int biasCount,
+            CLBuffer<FloatBuffer> bufFilterDelta){
+
+        CLKernel kernel = kernels.get("prepare");
+        kernel.rewind()
+                .putArg(momentam)
+                .putArg(bufFilterDelta);
+        OpenCL.execute(kernel, filterCount + biasCount);
+    }
+
+    public void join(float weightDecay, float learningRate,
+            int filterCount, int biasCount, int count,
+            CLBuffer<FloatBuffer> bufFilter, CLBuffer<FloatBuffer> bufFilterDelta){
+        CLKernel kernelFilter = kernels.get("joinFilter");
+        kernelFilter.rewind()
+                .putArg(weightDecay)
+                .putArg(learningRate)
+                .putArg(count)
+                .putArg(filterCount)
+                .putArgs(
+                    bufFilter,
+                    bufFilterDelta);
+        OpenCL.execute(kernelFilter, filterCount + biasCount);
     }
 
     public static void main(String[] args) {

@@ -131,7 +131,8 @@ public class ConvolutionLayer extends ImageNeuralLayer implements LerningLayer, 
             this.bufBias = OpenCL.createReadWriteBuffer(bias);
             this.bufFilterDelta = OpenCL.createReadWriteBuffer(filterDelta);
             this.bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
-            this.bufResult = OpenCL.createReadWriteBuffer(result.length);
+            this.bufResult = OpenCL.createReadWriteBuffer(result.length + 1);
+            ((FloatBuffer)bufResult.getBuffer().position(result.length)).put(1).rewind();
             this.bufDelta = OpenCL.createReadWriteBuffer(result.length);
             this.bufNewDelta = OpenCL.createWriteBuffer(newDelta.length);
             bufTempBias = OpenCL.createReadWriteBuffer(outputChannels * outputWidth * outputHeight);

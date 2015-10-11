@@ -65,3 +65,20 @@ __kernel void backword_bias(
     }
     biasDelta[j] += diffed[j] * delta[j] * learningRate;
 }
+
+__kernel void joinFilter(
+    float weightDecay,
+    float learningRate,
+    int count,
+    int filterCount,
+    __global float* filter,
+    __global const float* filterDelta,
+    int len
+){
+    int f = get_global_id(0);
+    if(f >= len){
+        return;
+    }
+    filter[f] += filterDelta[f] / count
+        - (f < filterCount ? weightDecay : 0) * learningRate * filter[f];
+}

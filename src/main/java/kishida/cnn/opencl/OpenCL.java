@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.Arrays;
 import lombok.Getter;
 
 /**
@@ -64,9 +65,12 @@ public class OpenCL {
         buf.getBuffer().put(data).rewind();//rewindしないと不安定になる
         return buf;
     }
-    public static CLBuffer<FloatBuffer> createReadWriteBuffer(float[] data){
-        CLBuffer<FloatBuffer> buf = createReadWriteBuffer(data.length);
-        buf.getBuffer().put(data).rewind();//rewindしないと不安定になる
+    public static CLBuffer<FloatBuffer> createReadWriteBuffer(float[]... data){
+        CLBuffer<FloatBuffer> buf = createReadWriteBuffer(
+                Arrays.stream(data).mapToInt(d -> d.length).sum());
+        FloatBuffer fb = buf.getBuffer();
+        Arrays.stream(data).forEach(fb::put);
+        fb.rewind();//rewindしないと不安定になる
         return buf;
     }
     public static CLBuffer<FloatBuffer> createReadWriteBuffer(int size){

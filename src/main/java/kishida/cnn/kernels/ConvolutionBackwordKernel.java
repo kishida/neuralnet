@@ -5,7 +5,7 @@
  */
 package kishida.cnn.kernels;
 
-import com.amd.aparapi.Kernel;
+import com.aparapi.Kernel;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 

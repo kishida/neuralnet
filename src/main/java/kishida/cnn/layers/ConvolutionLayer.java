@@ -5,7 +5,7 @@
  */
 package kishida.cnn.layers;
 
-import com.amd.aparapi.Kernel;
+import com.aparapi.Kernel;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;

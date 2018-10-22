@@ -5,7 +5,7 @@
  */
 package kishida.cnn.kernels;
 
-import com.amd.aparapi.Kernel;
+import com.aparapi.Kernel;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
 

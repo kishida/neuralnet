@@ -95,7 +95,7 @@ public class ConvolutionalNet {
 
     @SuppressWarnings({"ThrowableInstanceNotThrown", "ThrowableInstanceNeverThrown"})
     public static void main(String[] args) throws IOException {
-        System.setProperty("com.amd.aparapi.enableShowGeneratedOpenCL", "false");
+        System.setProperty("com.aparapi.enableShowGeneratedOpenCL", "false");
         String def = "C:\\Users\\naoki\\Desktop\\sampleimg288";
         Path dir = Paths.get(args.length > 0 ? args[0] : def);
         List<String> categories = Files.list(dir)

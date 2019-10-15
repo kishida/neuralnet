@@ -20,6 +20,7 @@ public class InfoCL {
         System.out.println(memSizeString(dev.getGlobalMemSize()));
         System.out.println(memSizeString(dev.getLocalMemSize()));
         System.out.println(dev.getMaxWorkGroupSize());
+        System.out.println(dev.getCVersion());
         ctx.release();
     }
     static String memSizeString(long memSize){

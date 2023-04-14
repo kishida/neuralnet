@@ -17,5 +17,9 @@ public class LogisticFunction extends ActivationFunction {
     public float diff(float value) {
         return value * (1 - value);
     }
+    @Override
+    public String getName() {
+        return "logistic";
+    }
 
 }

@@ -23,4 +23,9 @@ public class LimitedRectifiedLinear extends ActivationFunction {
         return value >= 0 && value <= 2 ? 1 : 0;
     }
 
+    @Override
+    public String getName() {
+        return "limitrelu";
+    }
+
 }

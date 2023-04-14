@@ -8,6 +8,8 @@ import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.io.Writer;
@@ -59,6 +61,8 @@ public class ConvolutionalNet {
     public static final String AVERAGE_PNG = "average.png";
     private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\alexnet.json.txt";
     private static final String RESOURCE_NAME = "/alexnet_def.json";
+    //private static final String FILENAME = "C:\\Users\\naoki\\Desktop\\tinynet.json.txt";
+    //private static final String RESOURCE_NAME = "/tinynet_def.json";
 
     static class Img{
 
@@ -89,8 +93,9 @@ public class ConvolutionalNet {
     static List<Double> historyData = new ArrayList<>();
     static LinkedList<Integer> rateData = new LinkedList<>();
 
+    @SuppressWarnings({"ThrowableInstanceNotThrown", "ThrowableInstanceNeverThrown"})
     public static void main(String[] args) throws IOException {
-        System.setProperty("com.amd.aparapi.enableShowGeneratedOpenCL", "false");
+        System.setProperty("com.aparapi.enableShowGeneratedOpenCL", "false");
         String def = "C:\\Users\\naoki\\Desktop\\sampleimg288";
         Path dir = Paths.get(args.length > 0 ? args[0] : def);
         List<String> categories = Files.list(dir)
@@ -184,14 +189,15 @@ public class ConvolutionalNet {
 
         NeuralNetwork nn;
 
-        /*
-        try(InputStream is = ConvolutionalNet.class.getResourceAsStream(RESOURCE_NAME);
-                InputStreamReader isr = new InputStreamReader(is)){
-            nn = NeuralNetwork.readFromJson(isr);
-        }*/
-
-        try(Reader r = Files.newBufferedReader(Paths.get(FILENAME))){
-            nn = NeuralNetwork.readFromJson(r);
+        if(true){
+            try(InputStream is = ConvolutionalNet.class.getResourceAsStream(RESOURCE_NAME);
+                    InputStreamReader isr = new InputStreamReader(is)){
+                nn = NeuralNetwork.readFromJson(isr);
+            }
+        }else{
+            try(Reader r = Files.newBufferedReader(Paths.get(FILENAME))){
+                nn = NeuralNetwork.readFromJson(r);
+            }
         }
 
         nn.init();
@@ -285,23 +291,13 @@ public class ConvolutionalNet {
                 Image lineGraph = createLineGraph(500, 200,
                         historyData, 1, 0);
                 historyLabel.setIcon(new ImageIcon(lineGraph));
-                //一段目のフィルタの表示
-                //全結合一段の表示
-                firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
-                //全結合二段の表示
-                lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
-
-                firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.getBias())));
-                secondBias.setIcon(new ImageIcon(createGraph(500, 128,
-                        conv2.getBias())));
-                fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.getBias())));
-                fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.getBias())));
 
                 //System.out.println(Arrays.stream(output).mapToObj(d -> String.format("%.2f", d)).collect(Collectors.joining(",")));
 
                 count[0]++;
                 nn.setImageIndex(nn.getImageIndex() + 1);
                 if(count[0] >= MINI_BATCH){
+
                     nn.joinBatch();
                     batchCount[0]++;
                     System.out.printf("%5d %4d %.2f/m %s %s%n", batchCount[0],
@@ -319,7 +315,7 @@ public class ConvolutionalNet {
                             System.out.printf("weight: %.2f～%.2f average %.2f ",
                                     ws.getMin(), ws.getMax(), ws.getAverage());
                             DoubleSummaryStatistics bs = ((LerningLayer)layer).getBiasStatistics();
-                            System.out.printf("bias: %.2f～%.2f average %.2f ",
+                            System.out.printf("bias: %.8f～%.8f average %.2f ",
                                     bs.getMin(), bs.getMax(), bs.getAverage());
                         }
                         System.out.println();
@@ -328,6 +324,18 @@ public class ConvolutionalNet {
                     count[0] = 0;
                     pStart[0] = System.currentTimeMillis();
                     nn.prepareBatch();
+
+                    //一段目のフィルタの表示
+                    //全結合一段の表示
+                    firstFc.setIcon(new ImageIcon(createGraph(256, 128, fc1.getResult())));
+                    //全結合二段の表示
+                    lastResult.setIcon(new ImageIcon(createGraph(256, 128, output)));
+
+                    firstBias.setIcon(new ImageIcon(createGraph(500, 128, conv1.getBias())));
+                    secondBias.setIcon(new ImageIcon(createGraph(500, 128,
+                            conv2.getBias())));
+                    fc1Bias.setIcon(new ImageIcon(createGraph(500, 128, fc1.getBias())));
+                    fc2Bias.setIcon(new ImageIcon(createGraph(500, 128, fc2.getBias())));
 
                     // 1時間に一回保存する
                     int hour = LocalTime.now().getHour();

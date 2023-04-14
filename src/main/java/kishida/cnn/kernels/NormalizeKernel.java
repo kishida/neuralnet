@@ -61,11 +61,7 @@ public class NormalizeKernel extends Kernel {
         }
         float std = max(threshold, sqrt(variance / count));
         result[chxy] = (input[chxy] - average) / std;
-        averages[chxy] = average;
-        rates[chxy] = std;
     }
-    float[] averages;
-    float[] rates;
     float[] result;
     float[] input;
     int inputChannels;
@@ -75,11 +71,9 @@ public class NormalizeKernel extends Kernel {
     float threshold;
 
     public float[] normalize(float[] input, int inputChannels, int inputWidth, int inputHeight,
-            int size, float[] averages, float[] rates, float threshold, boolean useGpu) {
+            int size, float threshold, float[] result, boolean useGpu) {
         this.input = input;
-        this.rates = rates;
-        this.result = new float[inputChannels * inputWidth * inputHeight];
-        this.averages = averages;
+        this.result = result;
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;
         this.inputHeight = inputHeight;
@@ -88,8 +82,6 @@ public class NormalizeKernel extends Kernel {
         if (useGpu) {
             put(input);
             execute(inputChannels * inputWidth * inputHeight);
-            get(averages);
-            get(rates);
             get(result);
         } else {
             IntStream.range(0, inputChannels).parallel().forEach(ch -> {

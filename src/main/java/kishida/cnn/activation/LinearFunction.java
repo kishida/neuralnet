@@ -20,5 +20,9 @@ public class LinearFunction extends ActivationFunction {
     public float diff(float value) {
         return 1;
     }
+    @Override
+    public String getName() {
+        return "linear";
+    }
 
 }

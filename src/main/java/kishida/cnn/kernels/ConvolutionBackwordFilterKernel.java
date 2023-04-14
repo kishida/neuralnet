@@ -44,7 +44,7 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
                 }
             }
         }
-        filter[fchij] += df;
+        filterDelta[fchij] += df;
     }
     float[] input;
     float[] result;
@@ -52,7 +52,7 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
     int inputChannels;
     int inputWidth;
     int inputHeight;
-    float[] filter;
+    float[] filterDelta;
     int outputChannels;
     int outputWidth;
     int outputHeight;
@@ -62,14 +62,14 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
 
     public void backword(float[] delta, float[] result,
             float[] input, int inputChannels, int inputWidth, int inputHeight,
-            float[] filter, int outputChannels, int outputWidth, int outputHeight,
+            float[] filterDelta, int outputChannels, int outputWidth, int outputHeight,
             int filterSize, int stride, float learningRate, boolean useGpu) {
         this.input = input;
         this.delta = delta;
         this.inputChannels = inputChannels;
         this.inputWidth = inputWidth;
         this.inputHeight = inputHeight;
-        this.filter = filter;
+        this.filterDelta = filterDelta;
         this.outputChannels = outputChannels;
         this.outputWidth = outputWidth;
         this.outputHeight = outputHeight;
@@ -79,11 +79,11 @@ public class ConvolutionBackwordFilterKernel extends Kernel {
         this.learningRate = learningRate;// / outputWidth;// * outputHeight);
         if (useGpu) {
             put(delta);
-            put(filter);
+            put(filterDelta);
             put(input);
             put(result);
             execute(outputChannels * inputChannels * filterSize * filterSize);
-            get(filter);
+            get(filterDelta);
         } else {
             IntStream.range(0, outputChannels).parallel().forEach((f) -> {
                 for (int chij = 0; chij < inputChannels * filterSize * filterSize; ++chij) {

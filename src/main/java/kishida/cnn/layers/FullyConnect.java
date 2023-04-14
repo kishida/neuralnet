@@ -6,13 +6,20 @@
 package kishida.cnn.layers;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Arrays;
+import com.jogamp.opencl.CLBuffer;
+import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import java.util.DoubleSummaryStatistics;
 import java.util.stream.IntStream;
 import kishida.cnn.activation.ActivationFunction;
 import kishida.cnn.kernels.FullyForwardKernel;
+import kishida.cnn.opencl.ConvolutionBackwordCL;
+import kishida.cnn.opencl.FullyBackwordCL;
+import kishida.cnn.opencl.FullyForwardCL;
+import kishida.cnn.opencl.OpenCL;
 import kishida.cnn.util.FloatUtil;
 import lombok.Getter;
 import lombok.Setter;
@@ -21,18 +28,14 @@ import lombok.Setter;
  *
  * @author naoki
  */
-public class FullyConnect extends NeuralLayer implements LerningLayer{
+public class FullyConnect extends NeuralLayer implements LerningLayer, FullGpuEnabled{
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     private float[]weight;
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     private float[] bias;
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     private float[]weightDelta;
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @Getter
     private float[] biasDelta;
 
     @JsonProperty
@@ -41,7 +44,8 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private int[] dropout;
     @Getter
     private float dropoutRate = 1;
-    @Getter @Setter
+    @JsonProperty
+    @Setter @Getter
     private boolean useGpu;
     private float[] newDelta;
     private float[] diffed;
@@ -49,6 +53,16 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     private ActivationFunction activation;
     @Getter
     private float initBias;
+
+    CLBuffer<FloatBuffer> bufWeight;
+    CLBuffer<FloatBuffer> bufBias;
+    CLBuffer<FloatBuffer> bufWeightDelta;
+    CLBuffer<FloatBuffer> bufBiasDelta;
+    CLBuffer<IntBuffer> bufDropout;
+    @JsonIgnore
+    @Getter
+    CLBuffer<FloatBuffer> bufResult;
+    CLBuffer<FloatBuffer> bufNewDelta;
 
     public FullyConnect(String name, int outputSize, float initBias, float dropoutRate, ActivationFunction activation, boolean useGpu) {
         this(name, outputSize, null, null, initBias, null, null, dropoutRate, null, activation, useGpu);
@@ -112,6 +126,61 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
         if(biasDelta == null){
             this.biasDelta = new float[outputSize];
         }
+        if(useGpu){
+            bufWeight = OpenCL.createReadWriteBuffer(weight);
+            bufBias = OpenCL.createReadWriteBuffer(bias);
+            bufWeightDelta = OpenCL.createReadWriteBuffer(weightDelta);
+            bufBiasDelta = OpenCL.createReadWriteBuffer(biasDelta);
+            bufResult = OpenCL.createReadWriteBuffer(result.length);
+            bufDropout = OpenCL.createReadBuffer(dropout);
+            bufNewDelta = OpenCL.createReadWriteBuffer(newDelta.length);
+            OpenCL.getQueue()
+                    .putWriteBuffer(bufWeight, false)
+                    .putWriteBuffer(bufBias, false)
+                    .putWriteBuffer(bufWeightDelta, false)
+                    .putWriteBuffer(bufBiasDelta, false)
+                    .putWriteBuffer(bufDropout, false);
+        }
+    }
+
+    public float[] getWeight() {
+        if(bufWeight != null){
+            OpenCL.getQueue().putReadBuffer(bufWeight, true);
+            bufWeight.getBuffer().get(weight).rewind();
+        }
+        return weight;
+    }
+
+    public float[] getBias() {
+        if(bufBias != null){
+            OpenCL.getQueue().putReadBuffer(bufBias, true);
+            bufBias.getBuffer().get(bias).rewind();
+        }
+        return bias;
+    }
+    public float[] getWeightDelta() {
+        if(bufWeightDelta != null){
+            OpenCL.getQueue().putReadBuffer(bufWeightDelta, true);
+            bufWeightDelta.getBuffer().get(weightDelta).rewind();
+        }
+        return weightDelta;
+    }
+
+    public float[] getBiasDelta() {
+        if(bufBiasDelta != null){
+            OpenCL.getQueue().putReadBuffer(bufBiasDelta, true);
+            bufBiasDelta.getBuffer().get(biasDelta).rewind();
+        }
+        return biasDelta;
+    }
+
+    @Override
+    public float[] getResult() {
+        if(bufResult != null && isUseGpu()){
+            OpenCL.getQueue().putReadBuffer(bufResult, true);
+            bufResult.getBuffer().get(result).rewind();
+        }
+        return result;
     }
 
     @JsonProperty("activationObj")
@@ -132,58 +201,97 @@ public class FullyConnect extends NeuralLayer implements LerningLayer{
     @Override
     public float[] forward(float[] in) {
         prepareDropout();
-        Arrays.fill(result, 0);
-        FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
-        /*
-        IntStream.range(0, out).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
-            for (int i = 0; i < in.length; ++i) {
-                result[j] += in[i] * weight[i * out + j];
+        if(useGpu){
+            if(false){
+                FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
+                activation.applyAfter(result);
+            }else{
+                FullyForwardCL.INSTANCE.forward(inputSize, outputSize, dropout, in, bufWeight, bufBias, result, activation);
             }
-            result[j] += bias[j];
-        });*/
-        activation.applyAfter(result);
+        }else{
+            FullyForwardKernel.INSTANCE.forward(outputSize, dropout, in, result, weight, bias, useGpu);
+            activation.applyAfter(result);
+        }
         return result;
     }
 
     @Override
+    public void forward(CLBuffer<FloatBuffer> input) {
+        prepareDropout();
+        bufDropout.getBuffer().put(dropout).rewind();
+        OpenCL.getQueue().putWriteBuffer(bufDropout, false);
+
+        FullyForwardCL.INSTANCE.forward(inputSize, outputSize,
+                bufDropout, input, bufWeight, bufBias, bufResult, activation);
+    }
+
+    @Override
     public float[] backward(float[] in, float[] delta) {
-        Arrays.fill(newDelta, 0);
-        Arrays.fill(diffed, 0);
-        for(int i = 0; i < result.length; ++i){
-                diffed[i] = activation.diff(result[i]);
-        }
-        IntStream.range(0, in.length).parallel().forEach((i) -> {
-            for (int j = 0; j < outputSize; ++j) {
-                if (dropout[j] != 1) {
-                    continue;
-                }
-                float d = diffed[j] * delta[j];
-                newDelta[i] += d *  weight[i * outputSize + j];//in[i] *;
-                weightDelta[i * outputSize + j] += d * in[i] * parent.getLearningRate();
+        if(useGpu && true){
+            FullyBackwordCL.INSTANCE.backword(inputSize, outputSize,
+                    dropout, in, delta, result, bufWeight, bufWeightDelta, bufBiasDelta, newDelta,
+                    parent.getLearningRate(), activation);
+        }else{
+            for(int i = 0; i < result.length; ++i){
+                    diffed[i] = activation.diff(result[i]);
             }
-        });
-        IntStream.range(0, outputSize).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
-            biasDelta[j] += diffed[j] * delta[j] * parent.getLearningRate();
-        });
+            IntStream.range(0, in.length).parallel().forEach((i) -> {
+                float nd = 0;
+                for (int j = 0; j < outputSize; ++j) {
+                    if (dropout[j] != 1) {
+                        continue;
+                    }
+                    float d = diffed[j] * delta[j];
+                    nd += d *  weight[i * outputSize + j];//in[i] *;
+                    weightDelta[i * outputSize + j] += d * in[i] * parent.getLearningRate();
+                }
+                newDelta[i] = nd;
+            });
+            IntStream.range(0, outputSize).parallel().filter(j -> dropout[j] == 1).forEach(j -> {
+                biasDelta[j] += diffed[j] * delta[j] * parent.getLearningRate();
+            });
+        }
         return newDelta;
     }
 
     @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta) {
+        FullyBackwordCL.INSTANCE.backword(inputSize, outputSize, bufDropout,
+                bufInput, bufDelta, bufResult,
+                bufWeight, bufWeightDelta,
+                bufBiasDelta, bufNewDelta, parent.getLearningRate(), activation);
+        return bufNewDelta;
+    }
+
+    @Override
     public void prepareBatch() {
-        float momentam = parent.getMomentam();
-        IntStream.range(0, weightDelta.length).forEach(i -> weightDelta[i] = weightDelta[i] * momentam);
-        IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
+        if(useGpu & true){
+            ConvolutionBackwordCL.INSTANCE.prepare(parent.getMomentam(),
+                    weightDelta.length, biasDelta.length, bufWeightDelta, bufBiasDelta);
+        }else{
+            float momentam = parent.getMomentam();
+            IntStream.range(0, weightDelta.length).forEach(i -> weightDelta[i] = weightDelta[i] * momentam);
+            IntStream.range(0, biasDelta.length).parallel().forEach(i -> biasDelta[i] = biasDelta[i] * momentam);
+        }
     }
 
     @Override
     public void joinBatch() {
-        IntStream.range(0, weight.length).parallel().forEach(ij -> {
-                weight[ij] += weightDelta[ij] / parent.getMiniBatch()
-                        - weight[ij] * parent.getWeightDecay() * parent.getLearningRate();
-        });
-        IntStream.range(0, bias.length).parallel().forEach(i -> {
-            bias[i] += biasDelta[i] / parent.getMiniBatch();
-        });
+        if(useGpu & true){
+            ConvolutionBackwordCL.INSTANCE.join(
+                    parent.getWeightDecay(), parent.getLearningRate(),
+                    weight.length, bias.length,
+                    parent.getMiniBatch(),
+                    bufWeight, bufWeightDelta, bufBias, bufBiasDelta);
+        }else{
+            IntStream.range(0, weight.length).parallel().forEach(ij -> {
+                    weight[ij] += weightDelta[ij] / parent.getMiniBatch()
+                            - weight[ij] * parent.getWeightDecay() * parent.getLearningRate();
+            });
+            IntStream.range(0, bias.length).parallel().forEach(i -> {
+                bias[i] += biasDelta[i] / parent.getMiniBatch();
+            });
+            }
     }
 
     @Override

@@ -23,8 +23,8 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
         this.outputChannels = outputChannels;
         this.outputWidth = outputWidth;
         this.outputHeight = outputHeight;
-        if(useGpu && outputWidth * outputHeight > 500){
-            execute(outputWidth * outputHeight);
+        if(useGpu){
+            execute(outputChannels * outputWidth * outputHeight);
             //throw new UnsupportedOperationException("because I dont know how to use private memory.");
         }else{
             IntStream.range(0, outputWidth).parallel().forEach(x -> {
@@ -38,8 +38,8 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
 
     @Override
     public void run() {
-        int xy = getGlobalId();
-        procGpu(xy);
+        int chxy = getGlobalId();
+        procGpu(chxy);
     }
 
     float[] result;
@@ -48,30 +48,22 @@ public class ConvolutionLocalNormalizationKernel extends Kernel{
     int outputChannels;
     static final int n = 5;
 
-    @PrivateMemorySpace(n) float[] sigma = new float[n]; // not work
+    //@PrivateMemorySpace(n) float[] sigma = new float[n]; // not work
 
-    public void procGpu(int xy){
+    public void procGpu(int chxy){
         final int k = 2;
         final float a = 0.0001f;
         final float b = 0.75f;
-        int lp = 0;
-        for(; lp < n / 2; ++lp){
-            sigma[lp] =
-                    result[lp * outputWidth * outputHeight + xy] *
-                    result[lp * outputWidth * outputHeight + xy];
+        int ch = chxy / (outputWidth * outputHeight);
+        int xy = chxy % (outputWidth * outputHeight);
+
+        float sum = 0;
+        for(int lp = max(0, ch - n / 2); lp <= min(outputChannels - 1, ch + n / 2); ++lp){
+            sum += result[lp * outputWidth * outputHeight + xy] *
+                   result[lp * outputWidth * outputHeight + xy];
         }
-        for(int ch = 0; ch < outputChannels; ++ch){
-            sigma[lp % n] = lp >= outputChannels ? 0 :
-                    result[lp * outputWidth * outputHeight + xy] *
-                    result[lp * outputWidth * outputHeight + xy];
-            lp = lp + 1;
-            float sum = 0;
-            for(int i = 0; i < n; ++i){
-                sum += sigma[i];
-            }
-            result[ch * outputWidth * outputHeight + xy] = result[ch * outputWidth * outputHeight + xy] /
-                    pow(k + a * sum, b);
-        }
+        result[chxy] = result[chxy] /
+                pow(k + a * sum, b);
 
     }
 

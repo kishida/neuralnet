@@ -38,7 +38,7 @@ public class NormalizeLayer extends ImageNeuralLayer {
         averages = new float[in.length];
         rates = new float[in.length];
         result = NormalizeKernel.INSTANCE.normalize(in, inputChannels, inputWidth, inputHeight,
-                size, averages, rates, threshold, useGpu);
+                size, threshold, result, useGpu);
         return result;
     }
 

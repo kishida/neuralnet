@@ -6,24 +6,30 @@
 package kishida.cnn.layers;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.jogamp.opencl.CLBuffer;
+import java.nio.FloatBuffer;
 import java.util.stream.IntStream;
+import kishida.cnn.opencl.MultiNormalizeCL;
+import kishida.cnn.opencl.OpenCL;
 import lombok.Getter;
 
 /**
  *
  * @author naoki
  */
-public class MultiNormalizeLayer extends ImageNeuralLayer{
+public class MultiNormalizeLayer extends ImageNeuralLayer implements FullGpuEnabled{
     @Getter
     int size;
     @Getter
     float threshold;
+    @JsonProperty
     @Getter
     boolean useGpu;
-
-    float[] averages;
-    float[] rates;
+    @JsonIgnore
+    @Getter
+    CLBuffer<FloatBuffer> bufResult;
 
     @JsonCreator
     public MultiNormalizeLayer(
@@ -43,68 +49,88 @@ public class MultiNormalizeLayer extends ImageNeuralLayer{
         outputChannels = inputChannels;
         outputWidth = inputWidth;
         outputHeight = inputHeight;
-        averages = new float[inputWidth * inputHeight];
-        rates = new float[inputWidth * inputHeight];
         result = new float[inputChannels * inputHeight * inputWidth];
+        bufResult = OpenCL.createReadWriteBuffer(result.length);
+    }
+
+    @Override
+    public float[] getResult() {
+        if(bufResult != null){
+            OpenCL.getQueue().putReadBuffer(bufResult, true);
+            bufResult.getBuffer().get(result).rewind();
+        }
+        return result;
     }
 
     @Override
     public float[] forward(float[] in) {
-
-        IntStream.range(0, inputWidth).parallel().forEach(x -> {
-            for(int y = 0; y < inputHeight; ++y){
-                float total = 0;
-                int count = 0;
-                for(int i = 0; i < size; ++i){
-                    int xx = x + i - size / 2;
-                    if(xx < 0 || xx >= inputWidth){
-                        continue;
-                    }
-                    for(int j = 0; j < size; ++j){
-                        int yy = y + j - size / 2;
-                        if(yy < 0 || yy >= inputHeight){
+        if(false){
+            MultiNormalizeCL.INSTANCE.normalize(inputChannels, inputWidth, inputHeight,
+                    size, threshold, in, result);
+        } else{
+            IntStream.range(0, inputWidth).parallel().forEach(x -> {
+                for(int y = 0; y < inputHeight; ++y){
+                    float total = 0;
+                    int count = 0;
+                    for(int i = 0; i < size; ++i){
+                        int xx = x + i - size / 2;
+                        if(xx < 0 || xx >= inputWidth){
                             continue;
                         }
-                        for(int ch = 0; ch < inputChannels; ++ch){
-                            total += in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
-                            ++count;
+                        for(int j = 0; j < size; ++j){
+                            int yy = y + j - size / 2;
+                            if(yy < 0 || yy >= inputHeight){
+                                continue;
+                            }
+                            for(int ch = 0; ch < inputChannels; ++ch){
+                                total += in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
+                                ++count;
+                            }
                         }
                     }
-                }
-                float average = total / count;
-                float variance = 0;
-                for(int i = 0; i < size; ++i){
-                    int xx = x + i - size / 2;
-                    if(xx < 0 || xx >= inputWidth){
-                        continue;
-                    }
-                    for(int j = 0; j < size; ++j){
-                        int yy = y + j - size / 2;
-                        if(yy < 0 || yy >= inputHeight){
+                    float average = total / count;
+                    float variance = 0;
+                    for(int i = 0; i < size; ++i){
+                        int xx = x + i - size / 2;
+                        if(xx < 0 || xx >= inputWidth){
                             continue;
                         }
-                        for(int ch = 0; ch < inputChannels; ++ch){
-                            float data = in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
-                            variance += (data - average) * (data - average);
+                        for(int j = 0; j < size; ++j){
+                            int yy = y + j - size / 2;
+                            if(yy < 0 || yy >= inputHeight){
+                                continue;
+                            }
+                            for(int ch = 0; ch < inputChannels; ++ch){
+                                float data = in[ch * inputHeight * inputWidth + xx * inputHeight + yy];
+                                variance += (data - average) * (data - average);
+                            }
                         }
                     }
+                    float std = Math.max(threshold, (float)Math.sqrt(variance / count));
+                    for(int ch = 0; ch < inputChannels; ++ch){
+                        int pos = ch * inputHeight * inputWidth + x * inputHeight + y;
+                        result[pos] = (in[pos] - average) / std;
+                    }
                 }
-                float std = Math.max(threshold, (float)Math.sqrt(variance / count));
-                averages[x * inputHeight + y] = average;
-                rates[x * inputHeight + y] = std;
-                for(int ch = 0; ch < inputChannels; ++ch){
-                    int pos = ch * inputHeight * inputWidth + x * inputHeight + y;
-                    result[pos] = (in[pos] - average) / std;
-                }
-            }
-        });
-
+            });
+        }
         return result;
+    }
+
+    @Override
+    public void forward(CLBuffer<FloatBuffer> input) {
+        MultiNormalizeCL.INSTANCE.normalize(inputChannels, inputWidth, inputHeight, size,
+                threshold, input, bufResult);
     }
 
     @Override
     public float[] backward(float[] in, float[] delta) {
         return delta;
+    }
+
+    @Override
+    public CLBuffer<FloatBuffer> backwardBuf(CLBuffer<FloatBuffer> bufInput, CLBuffer<FloatBuffer> bufDelta) {
+        return bufDelta;
     }
 
     @Override

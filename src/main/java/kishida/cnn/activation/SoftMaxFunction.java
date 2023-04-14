@@ -30,4 +30,9 @@ public class SoftMaxFunction extends ActivationFunction {
         return value * (1 - value);
     }
 
+    @Override
+    public String getName() {
+        return "softmax";
+    }
+
 }
